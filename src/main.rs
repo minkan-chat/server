@@ -27,8 +27,8 @@ async fn main() -> std::io::Result<()> {
         let mut app = App::new()
             .data(schema.clone())
             .service(web::resource("/").guard(guard::Post()).to(index));
+        println!("Playground: http://localhost:8000");
         if cfg!(debug_assertions) {
-            println!("Playground: http://localhost:8000");
             app = app.service(web::resource("/").guard(guard::Get()).to(index_playground));
         }
         app
