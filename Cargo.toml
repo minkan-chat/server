@@ -10,10 +10,14 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 actix = "0.10"
 actix-web = "3"
-async-graphql = "2.9.7"
+async-graphql = { git = "https://github.com/async-graphql/async-graphql" }
 async-graphql-actix-web = "2.9.7"
 log = "0.4"
 pretty_env_logger = "0.4"
 thiserror = "1"
 toml = "0.5"
+sqlx = { version = "0.5", features = ["chrono", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
+serde = "1"
+serde_cbor = "0.11"
 starwars = { path = "crates/starwars" }
+uuid = { version = "0.8", features = ["serde", "v4"] }

@@ -2,12 +2,18 @@ use actix_web::{guard, web, App, HttpResponse, HttpServer, Result};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_graphql_actix_web::{Request, Response};
-use starwars::{QueryRoot, StarWars, StarWarsSchema};
+use sqlx::{PgPool, migrate};
+use std::fs::read_to_string;
+use crate::models::graphql::schema::{Azuma, AzumaSchema, QueryRoot};
+use serde::Deserialize;
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
 
-async fn graphql(schema: web::Data<StarWarsSchema>, req: Request) -> Response {
+mod models;
+
+async fn graphql(schema: web::Data<AzumaSchema>, req: Request) -> Response {
+    //HttpResponse::Ok().body(Body::Bytes(Bytes::from(serde_cbor::to_vec(&schema.execute(req).await.data).unwrap())))
     schema.execute(req.into_inner()).await.into()
 }
 
@@ -19,23 +25,45 @@ async fn playground() -> Result<HttpResponse> {
         ))
 }
 
+#[derive(Deserialize, Clone)]
+pub struct AzumaConfig {
+    pub db_uri: String,
+    pub host_uri: String,
+}
+
+impl AzumaConfig {
+    fn load(path: &str) -> Self {
+        toml::from_str(&read_to_string(path).expect("Couldn't read file")).expect("couldn't deserialize config")
+    }
+}
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+
+    // Load config
+    let config  = AzumaConfig::load("config.toml");
+
+    // Connect to db
+    let db = PgPool::connect(&config.db_uri).await.unwrap();
+    migrate!("./migrations/")
+        .run(&db)
+        .await
+        .expect("couldn't run database migrations");
+
     let schema = Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
-        .data(StarWars::new())
+        .data(Azuma::new(db))
         .finish();
 
     HttpServer::new(move || {
         let mut app = App::new()
             .data(schema.clone())
             .service(web::resource(GRAPHQL_ENDPOINT).guard(guard::Post()).to(graphql));
-        println!("Playground: http://localhost:8000");
+        println!("Playground: http://{}", config.host_uri);
         if cfg!(debug_assertions) {
             app = app.service(web::resource(GRAPHQL_PLAYGROUND_ENDPOINT).guard(guard::Get()).to(playground));
         }
         app
     })
-    .bind("127.0.0.1:8000")?
+    .bind(config.host_uri)?
     .run()
     .await
 }
