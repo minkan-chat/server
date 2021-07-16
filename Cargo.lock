@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "async-graphql"
 version = "2.9.8"
-source = "git+https://github.com/async-graphql/async-graphql#73b6ebae427747c9981817ea8097f3f0319f20ea"
+source = "git+https://github.com/async-graphql/async-graphql#d116dc29504c1fa4dac7d4b4af6bcc0c9dea03a1"
 dependencies = [
  "async-graphql-derive 2.9.8 (git+https://github.com/async-graphql/async-graphql)",
  "async-graphql-parser 2.9.8 (git+https://github.com/async-graphql/async-graphql)",
@@ -432,15 +432,14 @@ dependencies = [
 [[package]]
 name = "async-graphql-actix-web"
 version = "2.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "020267320b86edef4a0c387dfd2654686094945eaeba74fef07896d76eaa9a62"
+source = "git+https://github.com/async-graphql/async-graphql#d116dc29504c1fa4dac7d4b4af6bcc0c9dea03a1"
 dependencies = [
  "actix",
  "actix-http",
  "actix-web",
  "actix-web-actors",
  "async-channel",
- "async-graphql 2.9.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "async-graphql 2.9.8 (git+https://github.com/async-graphql/async-graphql)",
  "futures-util",
  "serde_json",
  "serde_urlencoded",
@@ -465,7 +464,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "2.9.8"
-source = "git+https://github.com/async-graphql/async-graphql#73b6ebae427747c9981817ea8097f3f0319f20ea"
+source = "git+https://github.com/async-graphql/async-graphql#d116dc29504c1fa4dac7d4b4af6bcc0c9dea03a1"
 dependencies = [
  "Inflector",
  "async-graphql-parser 2.9.8 (git+https://github.com/async-graphql/async-graphql)",
@@ -493,7 +492,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-parser"
 version = "2.9.8"
-source = "git+https://github.com/async-graphql/async-graphql#73b6ebae427747c9981817ea8097f3f0319f20ea"
+source = "git+https://github.com/async-graphql/async-graphql#d116dc29504c1fa4dac7d4b4af6bcc0c9dea03a1"
 dependencies = [
  "async-graphql-value 2.9.8 (git+https://github.com/async-graphql/async-graphql)",
  "pest",
@@ -515,7 +514,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-value"
 version = "2.9.8"
-source = "git+https://github.com/async-graphql/async-graphql#73b6ebae427747c9981817ea8097f3f0319f20ea"
+source = "git+https://github.com/async-graphql/async-graphql#d116dc29504c1fa4dac7d4b4af6bcc0c9dea03a1"
 dependencies = [
  "serde",
  "serde_json",
