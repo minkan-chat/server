@@ -6,15 +6,17 @@ use sqlx::{PgPool, migrate};
 use std::fs::read_to_string;
 use crate::models::graphql::schema::{Azuma, AzumaSchema, QueryRoot};
 use serde::Deserialize;
+use actix_web::body::Body;
+use actix_web::web::Bytes;
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
 
 mod models;
 
-async fn graphql(schema: web::Data<AzumaSchema>, req: Request) -> Response {
-    //HttpResponse::Ok().body(Body::Bytes(Bytes::from(serde_cbor::to_vec(&schema.execute(req).await.data).unwrap())))
-    schema.execute(req.into_inner()).await.into()
+async fn graphql(schema: web::Data<AzumaSchema>, req: Request) -> HttpResponse {
+    HttpResponse::Ok().body(Body::Bytes(Bytes::from(serde_cbor::to_vec(&schema.execute(req.into_inner()).await).unwrap())))
+    //schema.execute(req.into_inner()).await.into()
 }
 
 async fn playground() -> Result<HttpResponse> {
@@ -57,7 +59,7 @@ async fn main() -> std::io::Result<()> {
         let mut app = App::new()
             .data(schema.clone())
             .service(web::resource(GRAPHQL_ENDPOINT).guard(guard::Post()).to(graphql));
-        println!("Playground: http://{}", config.host_uri);
+        //println!("Playground: http://{}", config.host_uri);
         if cfg!(debug_assertions) {
             app = app.service(web::resource(GRAPHQL_PLAYGROUND_ENDPOINT).guard(guard::Get()).to(playground));
         }

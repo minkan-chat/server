@@ -16,7 +16,7 @@ log = "0.4"
 pretty_env_logger = "0.4"
 thiserror = "1"
 toml = "0.5"
-sqlx = { version = "0.5", features = ["chrono", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
+sqlx = { version = "0.4", features = ["chrono", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
 serde = "1"
 serde_cbor = "0.11"
 starwars = { path = "crates/starwars" }
