@@ -16,7 +16,10 @@ mod models;
 
 async fn graphql(schema: web::Data<AzumaSchema>, req: Request) -> HttpResponse {
     HttpResponse::Ok().body(Body::Bytes(Bytes::from(serde_cbor::to_vec(&schema.execute(req.into_inner()).await).unwrap())))
-    //schema.execute(req.into_inner()).await.into()
+}
+
+async fn getsdl(schema: web::Data<AzumaSchema>) -> HttpResponse {
+    HttpResponse::Ok().body(Body::from(schema.sdl()))
 }
 
 async fn playground() -> Result<HttpResponse> {
@@ -58,7 +61,8 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let mut app = App::new()
             .data(schema.clone())
-            .service(web::resource(GRAPHQL_ENDPOINT).guard(guard::Post()).to(graphql));
+            .service(web::resource(GRAPHQL_ENDPOINT).guard(guard::Post()).to(graphql))
+            .route("/graphql/sdl", web::get().to(getsdl));
         //println!("Playground: http://{}", config.host_uri);
         if cfg!(debug_assertions) {
             app = app.service(web::resource(GRAPHQL_PLAYGROUND_ENDPOINT).guard(guard::Get()).to(playground));
