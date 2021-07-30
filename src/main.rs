@@ -21,6 +21,7 @@ async fn graphql(schema: web::Data<AzumaSchema>, req: Request) -> HttpResponse {
 }
 
 async fn getsdl(schema: web::Data<AzumaSchema>) -> HttpResponse {
+    println!("Hello?");
     HttpResponse::Ok().body(Body::from(schema.sdl()))
 }
 

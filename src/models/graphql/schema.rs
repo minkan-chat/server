@@ -1,6 +1,6 @@
-use async_graphql::{Schema, EmptySubscription, ID, Object, Result, Error};
+use async_graphql::{Schema, EmptySubscription, ID, Object, Result, Error, Scalar, ScalarType, Value, InputValueResult, InputValueError};
 use uuid::Uuid;
-
+use bytes::{self, Bytes};
 pub type AzumaSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
 pub struct QueryRoot;
@@ -13,7 +13,7 @@ impl QueryRoot {
         User {
             id: ID(Uuid::new_v4().to_string()),
             username: username.to_string(),
-            cert: vec![0x42u8]
+            cert: Binary(Bytes::from("Hello"))
         }
     }
 }
@@ -24,10 +24,30 @@ impl MutationRoot {
         Err(Error { message: "Failed".to_string(), extensions: None})
     }
 }
+
+#[derive(Clone)]
+struct Binary(Bytes);
+
+#[Scalar]
+impl ScalarType for Binary {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::Binary(value) = value {
+            Ok(Binary(value))
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::Binary(self.0.clone())
+    }
+}
+
+#[derive(Clone)]
 struct User {
     id: ID,
     username: String,
-    cert: Vec<u8>
+    cert: Binary
 }
 
 #[Object]
@@ -40,7 +60,7 @@ impl User {
         self.username.clone()
     }
 
-    async fn cert(&self) -> Vec<u8> {
+    async fn cert(&self) -> Binary {
         self.cert.clone()
     }
 }
