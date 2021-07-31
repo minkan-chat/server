@@ -1,11 +1,13 @@
-use async_graphql::{Schema, EmptySubscription, ID, Object, Result, Error, Scalar, ScalarType, Value, InputValueResult, InputValueError};
-use uuid::Uuid;
+use async_graphql::{
+    EmptySubscription, Error, InputValueError, InputValueResult, Object, Result, Scalar,
+    ScalarType, Schema, Value, ID,
+};
 use bytes::{self, Bytes};
+use uuid::Uuid;
 pub type AzumaSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
 pub struct QueryRoot;
 pub struct MutationRoot;
-
 
 #[Object]
 impl QueryRoot {
@@ -13,7 +15,7 @@ impl QueryRoot {
         User {
             id: ID(Uuid::new_v4().to_string()),
             username: username.to_string(),
-            cert: Binary(Bytes::from("Hello"))
+            cert: Binary(Bytes::from("Hello")),
         }
     }
 }
@@ -21,7 +23,10 @@ impl QueryRoot {
 #[Object]
 impl MutationRoot {
     async fn signup(&self, _username: String) -> Result<User> {
-        Err(Error { message: "Failed".to_string(), extensions: None})
+        Err(Error {
+            message: "Failed".to_string(),
+            extensions: None,
+        })
     }
 }
 
@@ -47,7 +52,7 @@ impl ScalarType for Binary {
 struct User {
     id: ID,
     username: String,
-    cert: Binary
+    cert: Binary,
 }
 
 #[Object]

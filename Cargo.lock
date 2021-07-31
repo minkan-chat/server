@@ -377,7 +377,7 @@ dependencies = [
 [[package]]
 name = "async-graphql"
 version = "2.9.9"
-source = "git+https://github.com/minkan-chat/async-graphql.git#661a416c00ba6e1cd6c5530884d268aa5d737e4b"
+source = "git+https://github.com/minkan-chat/async-graphql.git#c1cc30d421704895466b95cf45e85e0b03c9c3cf"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -389,6 +389,7 @@ dependencies = [
  "futures-util",
  "http",
  "indexmap",
+ "mime",
  "multer",
  "once_cell",
  "pin-project-lite 0.2.7",
@@ -404,7 +405,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-actix-web"
 version = "2.9.9"
-source = "git+https://github.com/minkan-chat/async-graphql.git#661a416c00ba6e1cd6c5530884d268aa5d737e4b"
+source = "git+https://github.com/minkan-chat/async-graphql.git#c1cc30d421704895466b95cf45e85e0b03c9c3cf"
 dependencies = [
  "actix",
  "actix-http",
@@ -420,7 +421,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "2.9.9"
-source = "git+https://github.com/minkan-chat/async-graphql.git#661a416c00ba6e1cd6c5530884d268aa5d737e4b"
+source = "git+https://github.com/minkan-chat/async-graphql.git#c1cc30d421704895466b95cf45e85e0b03c9c3cf"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -435,7 +436,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-parser"
 version = "2.9.9"
-source = "git+https://github.com/minkan-chat/async-graphql.git#661a416c00ba6e1cd6c5530884d268aa5d737e4b"
+source = "git+https://github.com/minkan-chat/async-graphql.git#c1cc30d421704895466b95cf45e85e0b03c9c3cf"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -447,7 +448,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-value"
 version = "2.9.9"
-source = "git+https://github.com/minkan-chat/async-graphql.git#661a416c00ba6e1cd6c5530884d268aa5d737e4b"
+source = "git+https://github.com/minkan-chat/async-graphql.git#c1cc30d421704895466b95cf45e85e0b03c9c3cf"
 dependencies = [
  "bytes 1.0.1",
  "serde",
@@ -2067,9 +2068,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.126"
+version = "1.0.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7505abeacaec74ae4778d9d9328fe5a5d04253220a85c4ee022239fc996d03"
+checksum = "f03b9878abf6d14e6779d3f24f07b2cfa90352cfec4acc5aab8f1ac7f146fae8"
 dependencies = [
  "serde_derive",
 ]
@@ -2086,9 +2087,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.126"
+version = "1.0.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "963a7dbc9895aeac7ac90e74f34a5d5261828f79df35cbed41e10189d3804d43"
+checksum = "a024926d3432516606328597e0f224a51355a493b49fdd67e9209187cbe55ecc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2097,9 +2098,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.65"
+version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28c5e91e4240b46c4c19219d6cc84784444326131a4210f496f948d5cc827a29"
+checksum = "336b10da19a12ad094b59d870ebde26a45402e5b470add4b5fd03c5048a32127"
 dependencies = [
  "indexmap",
  "itoa",
@@ -2132,6 +2133,7 @@ dependencies = [
  "pretty_env_logger",
  "serde",
  "serde_cbor",
+ "serde_json",
  "sqlx",
  "thiserror",
  "toml",
