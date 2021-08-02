@@ -1,11 +1,11 @@
-use crate::models::graphql::schema::{AzumaSchema, MutationRoot, QueryRoot};
+use crate::models::graphql::{schema::GraphQLSchema, queries::Query, mutations::Mutation};
 use actix_web::body::Body;
 
 use actix_web::post;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
+use async_graphql::EmptySubscription;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
-use async_graphql::{EmptySubscription, Schema};
 use async_graphql_actix_web::Request;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
@@ -18,7 +18,7 @@ mod models;
 
 #[post("/graphql")]
 async fn graphql(
-    schema: web::Data<AzumaSchema>,
+    schema: web::Data<GraphQLSchema>,
     req: Request,
     http_request: HttpRequest,
 ) -> HttpResponse {
@@ -40,7 +40,7 @@ async fn graphql(
     }
 }
 
-async fn getsdl(schema: web::Data<AzumaSchema>) -> HttpResponse {
+async fn getsdl(schema: web::Data<GraphQLSchema>) -> HttpResponse {
     HttpResponse::Ok().body(Body::from(schema.sdl()))
 }
 
@@ -76,14 +76,14 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("couldn't run database migrations");
 
-    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish();
+    let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
+        .finish();
 
     HttpServer::new(move || {
         let mut app = App::new()
             .data(schema.clone())
             .service(graphql)
             .route("/graphql/sdl", web::get().to(getsdl));
-        //println!("Playground: http://{}", config.host_uri);
         if cfg!(debug_assertions) {
             app = app.service(
                 web::resource(GRAPHQL_PLAYGROUND_ENDPOINT)
