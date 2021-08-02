@@ -4,5 +4,6 @@ CREATE TABLE users (
     username text NOT NULL,
     master_pw_hash bytea NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT current_timestamp,
-    suspended bool NOT NULL DEFAULT false
+    suspended bool NOT NULL DEFAULT false,
+    suspended_reason TEXT DEFAULT NULL
 )

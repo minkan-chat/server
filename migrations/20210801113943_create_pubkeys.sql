@@ -1,4 +1,5 @@
 CREATE TABLE pubkeys (
-    user uuid primary key,
+    user_id UUID PRIMARY KEY,
+    fingerprint TEXT UNIQUE,
     pubkey bytea UNIQUE
 )
