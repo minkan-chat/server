@@ -1,15 +1,17 @@
-use crate::models::graphql::{schema::GraphQLSchema, queries::Query, mutations::Mutation};
+use crate::models::graphql::{mutations::Mutation, queries::Query, schema::GraphQLSchema};
 use actix_web::body::Body;
 
-use actix_web::post;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
-use async_graphql::EmptySubscription;
+use actix_web::{post, HttpMessage};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
+use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
+use sequoia_openpgp::Cert;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
 use std::fs::read_to_string;
+use std::str::FromStr;
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
@@ -23,12 +25,7 @@ async fn graphql(
     http_request: HttpRequest,
 ) -> HttpResponse {
     let response = &schema.execute(req.into_inner()).await;
-    let content_type = http_request
-        .headers()
-        .get("Content-Type")
-        .unwrap() // could crash the worker
-        .to_str()
-        .unwrap();
+    let content_type = http_request.content_type();
 
     match content_type {
         "application/json" => HttpResponse::Ok()
@@ -52,22 +49,39 @@ async fn playground() -> Result<HttpResponse> {
         ))))
 }
 
-#[derive(Deserialize, Clone)]
-pub struct AzumaConfig {
-    pub db_uri: String,
-    pub host_uri: String,
+#[derive(Clone, Deserialize)]
+pub struct Config {
+    pub(crate) db_uri: String,
+    pub(crate) host_uri: String,
+    // The unencrypted private certificate of the server armor encoded.
+    pub(crate) server_cert: ServerCert,
 }
 
-impl AzumaConfig {
+impl Config {
     fn load(path: &str) -> Self {
         toml::from_str(&read_to_string(path).expect("Couldn't read file"))
             .expect("couldn't deserialize config")
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct ServerCert(Cert);
+
+impl<'de> Deserialize<'de> for ServerCert {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let cert = String::deserialize(deserializer)?;
+        Ok(ServerCert(Cert::from_str(&cert).unwrap_or_else(|e| {
+            panic!("Invalid server certificate: {}", e)
+        })))
+    }
+}
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load config
-    let config = AzumaConfig::load("config.toml");
+    let config = Config::load("config.toml");
 
     // Connect to db
     let db = PgPool::connect(&config.db_uri).await.unwrap();
@@ -77,6 +91,8 @@ async fn main() -> std::io::Result<()> {
         .expect("couldn't run database migrations");
 
     let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
+        .data(config.clone())
+        .data(db)
         .finish();
 
     HttpServer::new(move || {
@@ -93,7 +109,7 @@ async fn main() -> std::io::Result<()> {
         }
         app
     })
-    .bind(config.host_uri)?
+    .bind(config.host_uri.clone())?
     .run()
     .await
 }
