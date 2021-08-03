@@ -1,7 +1,14 @@
-use async_graphql::{ID, Object};
-use crate::models::graphql::types::{AuthenticatedUser, PrivateCertificate, User};
+use crate::{
+    models::graphql::types::{AuthenticatedUser, PrivateCertificate, User},
+    Config,
+};
+use async_graphql::{Context, Object, ID};
+use sequoia_openpgp::Cert;
+use uuid::Uuid;
 
-use super::types::{AuthenticationCredentialsUserInput, AuthenticationResult, SignupUserInput, SignupResult};
+use super::types::{
+    AuthenticationCredentialsUserInput, AuthenticationResult, SignupResult, SignupUserInput,
+};
 
 pub(crate) struct Mutation;
 
@@ -12,19 +19,26 @@ impl Mutation {
     async fn signup(&self, user: SignupUserInput) -> SignupResult {
         SignupResult {
             user: Some(User {}),
-            errors: vec![]
+            errors: vec![],
         }
     }
 
     /// The clients sends a AuthenticationCredentialsUserInput
-    async fn authenticate(&self, credentials: AuthenticationCredentialsUserInput) -> AuthenticationResult {
+    async fn authenticate(
+        &self,
+        ctx: &Context<'_>,
+        credentials: AuthenticationCredentialsUserInput,
+    ) -> AuthenticationResult {
+        let config = ctx.data::<Config>().unwrap();
         AuthenticationResult {
             user: Some(AuthenticatedUser {
-                certificate: PrivateCertificate {},
+                certificate: PrivateCertificate {
+                    cert: config.server_cert.0.clone(),
+                },
                 id: ID("aaa".to_string()),
-                name: "erik".to_string()
+                name: "erik".to_string(),
             }),
-            errors: vec![]
+            errors: vec![],
         }
     }
 }

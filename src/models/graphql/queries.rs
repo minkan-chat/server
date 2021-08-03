@@ -1,6 +1,9 @@
-use async_graphql::{ID, Object};
+use async_graphql::{Object, ID};
 
-use super::{interfaces::Actor, types::{Server, User}};
+use super::{
+    interfaces::Actor,
+    types::{Server, User},
+};
 
 pub(crate) struct Query;
 
