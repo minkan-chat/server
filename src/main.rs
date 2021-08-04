@@ -1,3 +1,4 @@
+use crate::models::graphql::interfaces::{Certificate, Error};
 use crate::models::graphql::{mutations::Mutation, queries::Query, schema::GraphQLSchema};
 use actix_web::body::Body;
 
@@ -7,6 +8,7 @@ use actix_web::{post, HttpMessage};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
+use log::{debug, info};
 use sequoia_openpgp::Cert;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
@@ -49,7 +51,7 @@ async fn playground() -> Result<HttpResponse> {
         ))))
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     pub(crate) db_uri: String,
     pub(crate) host_uri: String,
@@ -64,7 +66,7 @@ impl Config {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ServerCert(Cert);
 
 impl<'de> Deserialize<'de> for ServerCert {
@@ -80,21 +82,31 @@ impl<'de> Deserialize<'de> for ServerCert {
 }
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    pretty_env_logger::init();
     // Load config
+    info!("Loading config ...");
     let config = Config::load("config.toml");
+    debug!("Config: {:#?}", config);
 
     // Connect to db
-    let db = PgPool::connect(&config.db_uri).await.unwrap();
+    info!("Connecting to the database");
+    let db = PgPool::connect(&config.db_uri).await.unwrap_or_else(|e| panic!("Can't connect to database: {}", e));
+    info!("Running database migrations");
     migrate!("./migrations/")
         .run(&db)
         .await
         .expect("couldn't run database migrations");
 
+    // build the graphql schema
     let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
+        .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
+        .register_type::<Certificate>()
         .data(config.clone())
         .data(db)
         .finish();
 
+    info!("Starting http server on {}", config.host_uri);
+    
     HttpServer::new(move || {
         let mut app = App::new()
             .data(schema.clone())
