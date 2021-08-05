@@ -3,8 +3,6 @@ use crate::{
     Config,
 };
 use async_graphql::{Context, Object, ID};
-use sequoia_openpgp::Cert;
-use uuid::Uuid;
 
 use super::types::{
     AuthenticationCredentialsUserInput, AuthenticationResult, SignupResult, SignupUserInput,
