@@ -12,8 +12,11 @@ use log::{debug, info};
 use sequoia_openpgp::Cert;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
+use uuid::Uuid;
+use std::collections::HashSet;
 use std::fs::read_to_string;
 use std::str::FromStr;
+use std::sync::Mutex;
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
@@ -99,11 +102,13 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("couldn't run database migrations");
 
+
     // build the graphql schema
     let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
         .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
         .register_type::<Certificate>()
         .data(config.clone())
+        .data(Mutex::new(HashSet::<Uuid>::new()))
         .data(db)
         .finish();
 
