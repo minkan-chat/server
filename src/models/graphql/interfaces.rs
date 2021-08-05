@@ -53,7 +53,7 @@ pub(crate) enum Certificate {
 }
 
 #[derive(Interface)]
-#[graphql(field(name = "message", type = "String"))]
+#[graphql(field(name = "description", type = "String"))]
 /// Generic error type used for typed errors
 pub(crate) enum Error {
     UsernameUnavailable(UsernameUnavailable),

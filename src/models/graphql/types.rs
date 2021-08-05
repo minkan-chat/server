@@ -153,26 +153,26 @@ pub(crate) enum SignupError {
 #[derive(SimpleObject)]
 /// The username is already taken or unavailable for other reasons
 pub(crate) struct UsernameUnavailable {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 #[derive(SimpleObject)]
 /// Another user's certificate has the same fingerprint.
 /// This error is normally almost impossible but can happen if the client tries to use the same certificate twice.
 pub(crate) struct CertificateTaken {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 #[derive(SimpleObject)]
 /// The certificate malformed or something similar
 pub(crate) struct InvalidCetificate {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 #[derive(SimpleObject)]
 /// The certification of the server's PGP Certificate is invalid
 pub(crate) struct InvalidSignature {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 ///// Authentication Errors /////
@@ -187,19 +187,19 @@ pub(crate) enum AuthenticationError {
 #[derive(SimpleObject)]
 /// The username is unknown
 pub(crate) struct UnknownUser {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 #[derive(SimpleObject)]
 /// The master password hash derived from the master password is invalid
 pub(crate) struct InvalidMasterPasswordHash {
-    pub(crate) message: String,
+    pub(crate) description: String,
 }
 
 #[derive(SimpleObject)]
 /// The user is suspended
 pub(crate) struct UserSuspended {
-    pub(crate) message: String,
+    pub(crate) description: String,
     /// the date the user got suspended
     pub(crate) since: Option<DateTime>,
     /// the reason for the suspension
