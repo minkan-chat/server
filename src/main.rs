@@ -90,7 +90,9 @@ async fn main() -> std::io::Result<()> {
 
     // Connect to db
     info!("Connecting to the database");
-    let db = PgPool::connect(&config.db_uri).await.unwrap_or_else(|e| panic!("Can't connect to database: {}", e));
+    let db = PgPool::connect(&config.db_uri)
+        .await
+        .unwrap_or_else(|e| panic!("Can't connect to database: {}", e));
     info!("Running database migrations");
     migrate!("./migrations/")
         .run(&db)
@@ -106,7 +108,7 @@ async fn main() -> std::io::Result<()> {
         .finish();
 
     info!("Starting http server on {}", config.host_uri);
-    
+
     HttpServer::new(move || {
         let mut app = App::new()
             .data(schema.clone())

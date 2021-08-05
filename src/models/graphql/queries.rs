@@ -11,18 +11,17 @@ pub(crate) struct Query;
 /// The query root
 impl Query {
     /// Used to get information about the current backend Server.
-    /// A client, for example, need the Certificate of a Server to sign it as a proof.
     pub(crate) async fn server(&self) -> Server {
         Server {}
     }
 
-    /// returns an Actor by its id
-    pub(crate) async fn actor_by_id(&self, id: ID) -> Actor {
-        Actor::User(User {})
+    /// returns an Actor by its id or null if there's no such Actor
+    pub(crate) async fn actor_by_id(&self, id: ID) -> Option<Actor> {
+        Some(Actor::User(User {}))
     }
 
     /// returns an Actor by its name
-    pub(crate) async fn actor_by_name(&self, name: String) -> Actor {
-        Actor::User(User {})
+    pub(crate) async fn actor_by_name(&self, name: String) -> Option<Actor> {
+        Some(Actor::User(User {}))
     }
 }
