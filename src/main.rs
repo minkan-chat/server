@@ -5,18 +5,18 @@ use actix_web::body::Body;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use actix_web::{post, HttpMessage};
+use async_graphql::extensions::ApolloTracing;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
 use log::{debug, info};
+use moka::future::{Cache, CacheBuilder};
 use sequoia_openpgp::Cert;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
-use uuid::Uuid;
-use std::collections::HashSet;
 use std::fs::read_to_string;
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::time::Duration;
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
@@ -93,40 +93,42 @@ async fn main() -> std::io::Result<()> {
 
     // Connect to db
     info!("Connecting to the database");
-    let db = PgPool::connect(&config.db_uri)
+    let db: PgPool = PgPool::connect(&config.db_uri)
         .await
         .unwrap_or_else(|e| panic!("Can't connect to database: {}", e));
-    info!("Running database migrations");
+    info!("Running database migrations...");
     migrate!("./migrations/")
         .run(&db)
         .await
         .expect("couldn't run database migrations");
 
+    // cache items for one minute (60 seconds)
+    let challenge_cache: Cache<String, ()> = CacheBuilder::new(10_000)
+        .time_to_live(Duration::from_secs(60))
+        .build();
 
     // build the graphql schema
     let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
         .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
         .register_type::<Certificate>()
+        .extension(ApolloTracing)
         .data(config.clone())
-        .data(Mutex::new(HashSet::<Uuid>::new()))
+        .data(challenge_cache)
         .data(db)
         .finish();
 
     info!("Starting http server on {}", config.host_uri);
 
     HttpServer::new(move || {
-        let mut app = App::new()
+        App::new()
             .data(schema.clone())
             .service(graphql)
-            .route("/graphql/sdl", web::get().to(getsdl));
-        if cfg!(debug_assertions) {
-            app = app.service(
+            .route("/graphql/sdl", web::get().to(getsdl))
+            .service(
                 web::resource(GRAPHQL_PLAYGROUND_ENDPOINT)
                     .guard(guard::Get())
                     .to(playground),
-            );
-        }
-        app
+            )
     })
     .bind(config.host_uri.clone())?
     .run()

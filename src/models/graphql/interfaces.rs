@@ -3,8 +3,8 @@ use async_graphql::{Interface, ID};
 use super::{
     scalars::Bytes,
     types::{
-        CertificateTaken, InvalidCetificate, InvalidMasterPasswordHash, InvalidSignature,
-        PrivateCertificate, PublicCertificate, Server, UnknownUser, User, UserSuspended,
+        CertificateTaken, InvalidCertificate, InvalidChallenge, InvalidMasterPasswordHash,
+        InvalidSignature, PrivateCertificate, PublicCertificate, UnknownUser, User, UserSuspended,
         UsernameUnavailable,
     },
 };
@@ -27,9 +27,8 @@ use super::{
         desc = "The name of the Actor as an utf-8 string"
     )
 )]
-/// Represents an Actor. Could be a User or a Server
+/// Represents an Actor.
 pub(crate) enum Actor {
-    Server(Server),
     User(User),
 }
 
@@ -58,9 +57,10 @@ pub(crate) enum Certificate {
 pub(crate) enum Error {
     UsernameUnavailable(UsernameUnavailable),
     CertificateTaken(CertificateTaken),
-    InvalidCetificate(InvalidCetificate),
+    InvalidCetificate(InvalidCertificate),
     InvalidSignature(InvalidSignature),
     UnknownUser(UnknownUser),
     InvalidMasterPasswordHash(InvalidMasterPasswordHash),
     UserSuspended(UserSuspended),
+    InvalidChallenge(InvalidChallenge),
 }
