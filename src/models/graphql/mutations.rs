@@ -26,9 +26,7 @@ use super::{
 
 mod helpers {
 
-    use std::time::Instant;
-
-    use log::{debug, info, warn};
+    use log::{info, warn};
     use sequoia_openpgp::serialize::SerializeInto;
 
     use crate::models::graphql::types::{CertificateTaken, UsernameUnavailable};
@@ -241,9 +239,7 @@ mod helpers {
         // TODO: add cert policy/check that the Certificate has C E A S keys that all work with the signal/mls protocol
         // TODO: make sure to remove certifications from other users.
         if let Ok(cert) = Cert::from_bytes(&cert.0) {
-            let i = Instant::now();
             if cert.is_tsk() {
-                debug!("is tsk: {}", i.elapsed().as_millis());
                 return Some(cert);
             } else {
                 errors.push(SignupError::InvalidCertificate(InvalidCertificate {
