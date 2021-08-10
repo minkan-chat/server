@@ -4,8 +4,8 @@ use super::{
     scalars::Bytes,
     types::{
         CertificateTaken, InvalidCertificate, InvalidChallenge, InvalidMasterPasswordHash,
-        InvalidSignature, PrivateCertificate, PublicCertificate, UnknownUser, User, UserSuspended,
-        UsernameUnavailable,
+        InvalidSignature, InvalidUsername, PrivateCertificate, PublicCertificate, UnknownUser,
+        User, UserSuspended, UsernameUnavailable,
     },
 };
 
@@ -56,6 +56,7 @@ pub(crate) enum Certificate {
 /// Generic error type used for typed errors
 pub(crate) enum Error {
     UsernameUnavailable(UsernameUnavailable),
+    InvalidUsername(InvalidUsername),
     CertificateTaken(CertificateTaken),
     InvalidCetificate(InvalidCertificate),
     InvalidSignature(InvalidSignature),

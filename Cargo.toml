@@ -27,6 +27,8 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8.4"
 hex = "0.4.3"
 argon2 = "0.2"
+regex = "1.5.4"
+lazy_static = "1.4.0"
 
 # for windows uncomment this
 # [target.'cfg(windows)'.dependencies] does not work due to https://github.com/rust-lang/cargo/issues/1197

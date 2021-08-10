@@ -1,7 +1,7 @@
 CREATE TABLE users (
     user_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid() PRIMARY KEY,
     -- we have to create an index for the username because it is used all the time
-    username VARCHAR(16) NOT NULL UNIQUE,
+    username VARCHAR(16) NOT NULL UNIQUE CONSTRAINT check_username CHECK (username ~* '^[a-z0-9_]{3,16}$'),
     -- A argon2 hash. It uses a PHC string to represent the hash and the salt
     hash TEXT NOT NULL,
     -- times ALWAYS in UTC

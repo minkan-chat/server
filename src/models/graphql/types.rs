@@ -76,6 +76,8 @@ pub(crate) struct AuthenticatedUser {
     pub(crate) name: String,
     /// Since the client needs the secret parts of the PGP Certificate, the server sends them to the client for decryption
     pub(crate) certificate: PrivateCertificate,
+    pub(crate) token: String,
+    pub(crate) refresh_token: String,
 }
 ///// Input Types /////
 #[derive(InputObject)]
@@ -108,7 +110,7 @@ pub(crate) struct AuthenticationCredentialsUserInput {
 /// Used to have typed error types
 pub(crate) struct SignupResult {
     /// The generated User for the client to get its id. If there is an error, it should be null
-    pub(crate) user: Option<User>,
+    pub(crate) user: Option<AuthenticatedUser>,
     /// The errors that may have occured. If there were no errors, it is empty ([]) NOT null
     pub(crate) errors: Vec<SignupError>,
 }
@@ -127,6 +129,7 @@ pub(crate) struct AuthenticationResult {
 /// All error that can occur during signup
 pub(crate) enum SignupError {
     UsernameUnavailable(UsernameUnavailable),
+    InvalidUsername(InvalidUsername),
     CertificateTaken(CertificateTaken),
     InvalidCertificate(InvalidCertificate),
     InvalidSignature(InvalidSignature),
@@ -136,6 +139,12 @@ pub(crate) enum SignupError {
 #[derive(SimpleObject, Debug)]
 /// The username is already taken or unavailable for other reasons
 pub(crate) struct UsernameUnavailable {
+    pub(crate) description: String,
+}
+
+#[derive(SimpleObject, Debug)]
+/// If a username containts invalid characters (only letters and numbers are allowed) or is too long.
+pub(crate) struct InvalidUsername {
     pub(crate) description: String,
 }
 
