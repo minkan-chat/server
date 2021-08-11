@@ -16,8 +16,8 @@ log = "0.4"
 pretty_env_logger = "0.4"
 thiserror = "1"
 toml = "0.5"
-sqlx = { version = "0.4", features = ["chrono", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
-serde = "1"
+sqlx = { version = "0.4", features = ["chrono", "ipnetwork", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
+serde = { version = "1", features = ["derive"]}
 serde_cbor = "0.11"
 serde_json = "1.0.66"
 uuid = { version = "0.8", features = ["serde", "v4"] }
@@ -29,6 +29,7 @@ hex = "0.4.3"
 argon2 = "0.2"
 regex = "1.5.4"
 lazy_static = "1.4.0"
+jsonwebtoken = "8.0.0-beta.2"
 
 # for windows uncomment this
 # [target.'cfg(windows)'.dependencies] does not work due to https://github.com/rust-lang/cargo/issues/1197

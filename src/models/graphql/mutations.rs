@@ -1,25 +1,15 @@
-use crate::{
-    models::graphql::{
-        mutations::helpers::{
-            insert_user, parse_cert, parse_signature, validate_challenge, validate_username,
-        },
-        types::{
-            AuthenticatedUser, InvalidCertificate, InvalidChallenge, InvalidSignature,
-            PrivateCertificate, SignupError,
-        },
+use crate::models::graphql::{
+    mutations::helpers::{
+        insert_user, parse_cert, parse_signature, validate_challenge, validate_username,
     },
-    Config,
+    types::{
+        AuthenticatedUser, InvalidCertificate, InvalidChallenge, InvalidSignature,
+        PrivateCertificate, SignupError,
+    },
 };
-use regex::Regex;
-
-use argon2::{
-    password_hash::{PasswordHasher, SaltString},
-    Argon2,
-};
-use async_graphql::{Context, Object, ID};
+use jsonwebtoken::EncodingKey;
 use moka::future::Cache;
-use sequoia_openpgp::{packet::Signature, parse::Parse, Cert};
-use sqlx::PgPool;
+use regex::Regex;
 
 use super::{
     scalars::Bytes,
@@ -27,12 +17,25 @@ use super::{
         AuthenticationCredentialsUserInput, AuthenticationResult, SignupResult, SignupUserInput,
     },
 };
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Argon2,
+};
+use async_graphql::{Context, Object, ID};
+use sequoia_openpgp::{packet::Signature, parse::Parse, Cert};
+use sqlx::PgPool;
 
 mod helpers {
 
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Duration, Utc};
+    use jsonwebtoken::{encode, EncodingKey, Header};
     use lazy_static::lazy_static;
-    use log::{info, warn};
+    use log::{debug, info, warn};
+    use moka::future::Cache;
     use sequoia_openpgp::serialize::SerializeInto;
+    use serde::{Deserialize, Serialize};
 
     use crate::models::graphql::types::{CertificateTaken, InvalidUsername, UsernameUnavailable};
 
@@ -204,6 +207,89 @@ mod helpers {
         }
     }
 
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Claims {
+        exp: i64,
+        iat: i64,
+        nbf: i64,
+        sub: uuid::Uuid,
+        jti: uuid::Uuid,
+        // if the token is a refresh token
+        rft: bool,
+    }
+
+    /// returns (access token, first refresh token)
+    pub(super) async fn create_session(
+        key: &EncodingKey,
+        user_id: uuid::Uuid,
+        session_name: Option<&str>,
+        db: &PgPool,
+    ) -> (String, String) {
+        let now: DateTime<Utc> = Utc::now();
+        let session_id: uuid::Uuid = sqlx::query!(
+            r#"
+        INSERT INTO session_info (
+            user_id,
+            session_name
+        ) VALUES ($1, $2)
+        RETURNING session_id
+        "#,
+            user_id,
+            session_name,
+        )
+        .fetch_one(db)
+        .await
+        .expect("The database should return a session id")
+        .session_id;
+
+        let claims = Claims {
+            exp: (now + Duration::hours(12)).timestamp(),
+            iat: now.timestamp(),
+            jti: session_id,
+            nbf: now.timestamp(),
+            rft: false,
+            sub: user_id,
+        };
+
+        let access_token =
+            encode(&Header::default(), &claims, key).expect("Failed to create access token");
+
+        let claims = Claims {
+            exp: (now + Duration::hours(7)).timestamp(),
+            iat: now.timestamp(),
+            jti: session_id,
+            nbf: now.timestamp(),
+            rft: true,
+            sub: user_id,
+        };
+
+        let refresh_token =
+            encode(&Header::default(), &claims, key).expect("Failed to create refresh token");
+
+        (access_token, refresh_token)
+    }
+
+    pub(super) async fn get_token_expiry(user_id: uuid::Uuid, ctx: &Context<'_>) -> i64 {
+        let cache = ctx.data::<Cache<uuid::Uuid, i64>>().unwrap();
+        cache
+            .get_or_insert_with(user_id, async {
+                let db = ctx.data::<PgPool>().unwrap();
+                debug!("Getting token expiry for {}", &user_id);
+                let r = sqlx::query!(
+                    r#"
+            SELECT token_expiry FROM users WHERE user_id = $1
+            "#,
+                    user_id
+                )
+                .fetch_one(db)
+                .await;
+
+                r.expect("The database didn't return a token_expiry")
+                    .token_expiry
+                    .timestamp()
+            })
+            .await
+    }
     /// Returns true of the challenge is valid
     pub(super) fn validate_challenge(
         challenge: &str,
@@ -267,6 +353,7 @@ mod helpers {
         result: &mut SignupResult,
         cert: Cert,
         db: &PgPool,
+        key: &EncodingKey,
     ) {
         let r = sqlx::query!(
             // insert the user into the users table, let the database generate a uuid,
@@ -305,12 +392,14 @@ mod helpers {
                     id.to_string(),
                     cert.fingerprint().to_spaced_hex(),
                 );
+                let (access_token, refresh_token) =
+                    create_session(key, uuid::Uuid::from_str(id.as_str()).unwrap(), None, db).await;
                 result.user = Some(AuthenticatedUser {
                     id,
                     certificate: PrivateCertificate { cert: cert },
                     name: user.name,
-                    token: "dummy".to_string(),
-                    refresh_token: "dummy refresh".to_string(),
+                    access_token,
+                    refresh_token,
                 });
             }
             Err(e) => {
@@ -378,9 +467,11 @@ mod helpers {
         // TODO: spawn thread because hashing takes 9-14ms
         let salt = SaltString::generate(&mut rand::rngs::OsRng);
 
-        let argon2 = Argon2::default();
+        lazy_static! {
+            static ref ARGON2: Argon2<'static> = Argon2::default();
+        }
 
-        argon2
+        ARGON2
             .hash_password_simple(&master_password_hash.0, &salt)
             .unwrap()
             .to_string()
@@ -423,9 +514,9 @@ impl Mutation {
             // If anything went wrong, we won't continue here
             if result.errors.is_empty() {
                 let db = ctx.data::<PgPool>().unwrap();
-
+                let key = ctx.data::<EncodingKey>().unwrap();
                 // this might fail, if so, errors are added to the result
-                insert_user(user, &mut result, cert, db).await;
+                insert_user(user, &mut result, cert, db, key).await;
             }
         }
 
@@ -437,20 +528,11 @@ impl Mutation {
     /// The clients sends a AuthenticationCredentialsUserInput
     async fn authenticate(
         &self,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
         _credentials: AuthenticationCredentialsUserInput,
     ) -> AuthenticationResult {
-        let config = ctx.data::<Config>().unwrap();
         AuthenticationResult {
-            user: Some(AuthenticatedUser {
-                certificate: PrivateCertificate {
-                    cert: config.server_cert.0.clone(),
-                },
-                id: ID("aaa".to_string()),
-                name: "erik".to_string(),
-                token: "aa".to_string(),
-                refresh_token: "aa".to_string(),
-            }),
+            user: None,
             errors: vec![],
         }
     }

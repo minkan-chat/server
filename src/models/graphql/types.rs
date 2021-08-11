@@ -76,7 +76,7 @@ pub(crate) struct AuthenticatedUser {
     pub(crate) name: String,
     /// Since the client needs the secret parts of the PGP Certificate, the server sends them to the client for decryption
     pub(crate) certificate: PrivateCertificate,
-    pub(crate) token: String,
+    pub(crate) access_token: String,
     pub(crate) refresh_token: String,
 }
 ///// Input Types /////
