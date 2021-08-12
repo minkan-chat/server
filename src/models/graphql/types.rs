@@ -76,8 +76,7 @@ pub(crate) struct AuthenticatedUser {
     pub(crate) name: String,
     /// Since the client needs the secret parts of the PGP Certificate, the server sends them to the client for decryption
     pub(crate) certificate: PrivateCertificate,
-    pub(crate) access_token: String,
-    pub(crate) refresh_token: String,
+    pub(crate) token: TokenPair,
 }
 ///// Input Types /////
 #[derive(InputObject)]
@@ -201,4 +200,36 @@ pub(crate) struct UserSuspended {
     pub(crate) since: Option<DateTime>,
     /// the reason for the suspension
     pub(crate) reason: Option<String>,
+}
+
+#[derive(SimpleObject)]
+pub(crate) struct RefreshTokenResult {
+    pub(crate) token: Option<TokenPair>,
+    pub(crate) errors: Vec<RefreshTokenError>,
+}
+
+#[derive(Union)]
+pub(crate) enum RefreshTokenError {
+    InvalidRefreshToken(InvalidRefreshToken),
+    ExpiredRefreshToken(ExpiredRefreshToken),
+}
+#[derive(SimpleObject)]
+/// The token is malformed or invalid
+pub(crate) struct InvalidRefreshToken {
+    pub(crate) description: String,
+}
+
+#[derive(SimpleObject)]
+/// The token is expired. The client can check this before making the request
+/// by looking at the ``exp`` field in the claims
+pub(crate) struct ExpiredRefreshToken {
+    pub(crate) description: String,
+}
+
+#[derive(SimpleObject)]
+/// Containts the current access token and the refresh token for the next token pair.
+/// Both are Json Web Tokens
+pub(crate) struct TokenPair {
+    pub(crate) access_token: String,
+    pub(crate) refresh_token: String,
 }

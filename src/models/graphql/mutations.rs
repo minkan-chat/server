@@ -1,20 +1,25 @@
 use crate::models::graphql::{
     mutations::helpers::{
-        insert_user, parse_cert, parse_signature, validate_challenge, validate_username,
+        delete_session, generate_token, get_token_expiry, insert_user, is_refresh_token_denied,
+        parse_cert, parse_signature, set_token_expiry, validate_challenge, validate_username,
+        Claims,
     },
     types::{
-        AuthenticatedUser, InvalidCertificate, InvalidChallenge, InvalidSignature,
-        PrivateCertificate, SignupError,
+        AuthenticatedUser, ExpiredRefreshToken, InvalidCertificate, InvalidChallenge,
+        InvalidRefreshToken, InvalidSignature, PrivateCertificate, RefreshTokenError, SignupError,
+        TokenPair,
     },
 };
-use jsonwebtoken::EncodingKey;
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use lazy_static::lazy_static;
 use moka::future::Cache;
 use regex::Regex;
 
 use super::{
     scalars::Bytes,
     types::{
-        AuthenticationCredentialsUserInput, AuthenticationResult, SignupResult, SignupUserInput,
+        AuthenticationCredentialsUserInput, AuthenticationResult, RefreshTokenResult, SignupResult,
+        SignupUserInput,
     },
 };
 use argon2::{
@@ -37,7 +42,9 @@ mod helpers {
     use sequoia_openpgp::serialize::SerializeInto;
     use serde::{Deserialize, Serialize};
 
-    use crate::models::graphql::types::{CertificateTaken, InvalidUsername, UsernameUnavailable};
+    use crate::models::graphql::types::{
+        CertificateTaken, InvalidUsername, TokenPair, UsernameUnavailable,
+    };
 
     use super::*;
     // Write tests for helper methods
@@ -208,16 +215,48 @@ mod helpers {
     }
 
     #[derive(Debug, Serialize, Deserialize)]
-    struct Claims {
-        exp: i64,
-        iat: i64,
-        nbf: i64,
-        sub: uuid::Uuid,
-        jti: uuid::Uuid,
+    pub(super) struct Claims {
+        pub(super) exp: i64,
+        pub(super) iat: i64,
+        pub(super) nbf: i64,
+        pub(super) sub: uuid::Uuid,
+        pub(super) jti: uuid::Uuid,
+        // the session id
+        pub(super) sid: uuid::Uuid,
         // if the token is a refresh token
-        rft: bool,
+        pub(super) rft: bool,
     }
 
+    pub(super) async fn is_refresh_token_denied(claims: &Claims, db: &PgPool) -> bool {
+        // TODO: consider caching denied refresh tokens
+        sqlx::query!(
+            r#"
+        SELECT exists(SELECT 1 FROM denied_tokens WHERE "token_id" = $1)
+        "#,
+            claims.jti
+        )
+        .fetch_one(db)
+        .await
+        .unwrap()
+        .exists
+        .unwrap()
+    }
+
+    pub(super) async fn delete_session(session_id: uuid::Uuid, db: &PgPool) {
+        if let Err(e) = sqlx::query!(
+            r#"
+                DELETE FROM session_info WHERE session_id = $1"#,
+            session_id
+        )
+        .execute(db)
+        .await
+        {
+            warn!(
+                "Failed to delete session {} from database: {}",
+                session_id, e
+            )
+        }
+    }
     /// returns (access token, first refresh token)
     pub(super) async fn create_session(
         key: &EncodingKey,
@@ -225,7 +264,6 @@ mod helpers {
         session_name: Option<&str>,
         db: &PgPool,
     ) -> (String, String) {
-        let now: DateTime<Utc> = Utc::now();
         let session_id: uuid::Uuid = sqlx::query!(
             r#"
         INSERT INTO session_info (
@@ -242,10 +280,20 @@ mod helpers {
         .expect("The database should return a session id")
         .session_id;
 
+        generate_token(key, session_id, user_id)
+    }
+
+    pub(super) fn generate_token(
+        key: &EncodingKey,
+        session_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+    ) -> (String, String) {
+        let now = Utc::now();
         let claims = Claims {
             exp: (now + Duration::hours(12)).timestamp(),
             iat: now.timestamp(),
-            jti: session_id,
+            jti: uuid::Uuid::new_v4(),
+            sid: session_id,
             nbf: now.timestamp(),
             rft: false,
             sub: user_id,
@@ -257,7 +305,8 @@ mod helpers {
         let claims = Claims {
             exp: (now + Duration::hours(7)).timestamp(),
             iat: now.timestamp(),
-            jti: session_id,
+            jti: uuid::Uuid::new_v4(),
+            sid: session_id,
             nbf: now.timestamp(),
             rft: true,
             sub: user_id,
@@ -269,6 +318,28 @@ mod helpers {
         (access_token, refresh_token)
     }
 
+    /// updates the token expiry to now and invalidates the current session
+    pub(super) async fn set_token_expiry(
+        user_id: uuid::Uuid,
+        ctx: &Context<'_>,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> i64 {
+        let cache = ctx.data::<Cache<uuid::Uuid, i64>>().unwrap();
+        let db = ctx.data::<PgPool>().unwrap();
+        let t = timestamp.unwrap_or_else(Utc::now);
+        cache.insert(user_id, t.timestamp()).await;
+        sqlx::query!(
+            r#"
+        UPDATE users SET token_expiry = $1 WHERE user_id = $2
+        "#,
+            t,
+            user_id
+        )
+        .execute(db)
+        .await
+        .expect("Failed to update token_expiry in database");
+        t.timestamp()
+    }
     pub(super) async fn get_token_expiry(user_id: uuid::Uuid, ctx: &Context<'_>) -> i64 {
         let cache = ctx.data::<Cache<uuid::Uuid, i64>>().unwrap();
         cache
@@ -396,10 +467,12 @@ mod helpers {
                     create_session(key, uuid::Uuid::from_str(id.as_str()).unwrap(), None, db).await;
                 result.user = Some(AuthenticatedUser {
                     id,
-                    certificate: PrivateCertificate { cert: cert },
+                    certificate: PrivateCertificate { cert },
                     name: user.name,
-                    access_token,
-                    refresh_token,
+                    token: TokenPair {
+                        access_token,
+                        refresh_token,
+                    },
                 });
             }
             Err(e) => {
@@ -535,5 +608,79 @@ impl Mutation {
             user: None,
             errors: vec![],
         }
+    }
+
+    async fn refresh_token(&self, ctx: &Context<'_>, refresh_token: String) -> RefreshTokenResult {
+        let decoding_key = ctx.data::<DecodingKey>().unwrap();
+        let encoding_key = ctx.data::<EncodingKey>().unwrap();
+
+        let mut result = RefreshTokenResult {
+            token: None,
+            errors: vec![],
+        };
+
+        lazy_static! {
+            static ref VALIDATION: Validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+        }
+
+        let token = decode::<Claims>(refresh_token.as_str(), decoding_key, &VALIDATION);
+
+        match token {
+            Ok(token) => {
+                let claims = token.claims;
+                let db = ctx.data::<PgPool>().unwrap();
+                if claims.rft {
+                    if get_token_expiry(claims.sub, ctx).await > claims.iat {
+                        result.errors.push(RefreshTokenError::ExpiredRefreshToken(
+                            ExpiredRefreshToken {
+                                description:
+                                    "Refresh token is expired. Note: You have to log in again."
+                                        .to_string(),
+                            },
+                        ))
+                    } else if is_refresh_token_denied(&claims, db).await {
+                        // a bad actor has stolen a refresh token. We don't know if this
+                        // request comes from the actual user or the bad actor. Because
+                        // of this, we revoke the session.
+                        set_token_expiry(claims.sub, ctx, None).await;
+                        delete_session(claims.sid, db).await;
+                        result.errors.push(RefreshTokenError::ExpiredRefreshToken(
+                            ExpiredRefreshToken {
+                                description:
+                                    "Refresh token is expired. Note: You have to log in again."
+                                        .to_string(),
+                            },
+                        ))
+                    } else {
+                        let (access_token, refresh_token) =
+                            generate_token(encoding_key, claims.sid, claims.sub);
+                        result.token = Some(TokenPair {
+                            access_token,
+                            refresh_token,
+                        })
+                    }
+                } else {
+                    result.errors.push(RefreshTokenError::InvalidRefreshToken(
+                        InvalidRefreshToken {
+                            description: "Not a refresh token.".to_string(),
+                        },
+                    ))
+                }
+            }
+            Err(e) => match e.into_kind() {
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => result.errors.push(
+                    RefreshTokenError::ExpiredRefreshToken(ExpiredRefreshToken {
+                        description: "Refresh token is expired. Note: You have to log in again."
+                            .to_string(),
+                    }),
+                ),
+                _ => result.errors.push(RefreshTokenError::InvalidRefreshToken(
+                    InvalidRefreshToken {
+                        description: "The refresh token is invalid.".to_string(),
+                    },
+                )),
+            },
+        }
+        result
     }
 }
