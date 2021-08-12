@@ -1,0 +1,1 @@
+CREATE TABLE denied_tokens (token_id UUID UNIQUE PRIMARY KEY);
