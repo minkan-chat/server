@@ -3,9 +3,10 @@ use async_graphql::{Interface, ID};
 use super::{
     scalars::Bytes,
     types::{
-        CertificateTaken, InvalidCertificate, InvalidChallenge, InvalidMasterPasswordHash,
-        InvalidSignature, InvalidUsername, PrivateCertificate, PublicCertificate, UnknownUser,
-        User, UserSuspended, UsernameUnavailable,
+        CertificateTaken, ExpiredRefreshToken, InvalidCertificate, InvalidChallenge,
+        InvalidMasterPasswordHash, InvalidRefreshToken, InvalidSignature, InvalidUsername,
+        PrivateCertificate, PublicCertificate, UnknownUser, User, UserSuspended,
+        UsernameUnavailable,
     },
 };
 
@@ -64,4 +65,6 @@ pub(crate) enum Error {
     InvalidMasterPasswordHash(InvalidMasterPasswordHash),
     UserSuspended(UserSuspended),
     InvalidChallenge(InvalidChallenge),
+    ExpiredRefreshToken(ExpiredRefreshToken),
+    InvalidRefreshToken(InvalidRefreshToken),
 }

@@ -9,7 +9,7 @@ use async_graphql::extensions::ApolloTracing;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
-use jsonwebtoken::EncodingKey;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use log::{debug, info};
 use moka::future::{Cache, CacheBuilder};
 use sequoia_openpgp::Cert;
@@ -117,8 +117,12 @@ async fn main() -> std::io::Result<()> {
         .time_to_live(Duration::from_secs(120))
         .build();
 
-    let jwt_secret_key =
+    let jwt_encoding_key =
         EncodingKey::from_secret(&hex::decode(&config.jwt_secret).expect("Invalid jwt hex secret"));
+
+    let jwt_decoding_key =
+        DecodingKey::from_secret(&hex::decode(&config.jwt_secret).expect("Invalid jwt hex secret"));
+
     // build the graphql schema
     let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
         .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
@@ -128,7 +132,8 @@ async fn main() -> std::io::Result<()> {
         .data(challenge_cache)
         .data(token_expiry_cache)
         .data(db)
-        .data(jwt_secret_key)
+        .data(jwt_encoding_key)
+        .data(jwt_decoding_key)
         .finish();
 
     info!("Starting http server on {}", config.host_uri);
