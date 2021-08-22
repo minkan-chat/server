@@ -1,13 +1,13 @@
 use crate::models::graphql::{
     mutations::helpers::{
-        delete_session, generate_token, get_token_expiry, insert_user, is_refresh_token_denied,
-        parse_cert, parse_signature, set_token_expiry, validate_challenge, validate_username,
-        Claims,
+        create_session, delete_session, generate_token, get_token_expiry, insert_user,
+        is_refresh_token_denied, parse_cert, parse_signature, set_token_expiry, validate_challenge,
+        validate_username, Claims,
     },
     types::{
-        AuthenticatedUser, ExpiredRefreshToken, InvalidCertificate, InvalidChallenge,
-        InvalidRefreshToken, InvalidSignature, PrivateCertificate, RefreshTokenError, SignupError,
-        TokenPair,
+        AuthenticatedUser, AuthenticationError, ExpiredRefreshToken, InvalidCertificate,
+        InvalidChallenge, InvalidMasterPasswordHash, InvalidRefreshToken, InvalidSignature,
+        PrivateCertificate, RefreshTokenError, SignupError, TokenPair, UnknownUser, UserSuspended,
     },
 };
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
@@ -24,7 +24,7 @@ use super::{
 };
 use argon2::{
     password_hash::{PasswordHasher, SaltString},
-    Argon2,
+    Argon2, PasswordHash, PasswordVerifier,
 };
 use async_graphql::{Context, Object, ID};
 use sequoia_openpgp::{packet::Signature, parse::Parse, Cert};
@@ -601,13 +601,79 @@ impl Mutation {
     /// The clients sends a AuthenticationCredentialsUserInput
     async fn authenticate(
         &self,
-        _ctx: &Context<'_>,
-        _credentials: AuthenticationCredentialsUserInput,
+        ctx: &Context<'_>,
+        credentials: AuthenticationCredentialsUserInput,
     ) -> AuthenticationResult {
-        AuthenticationResult {
+        let db = ctx.data::<PgPool>().unwrap();
+        let encoding_key = ctx.data::<EncodingKey>().unwrap();
+
+        let mut result = AuthenticationResult {
             user: None,
             errors: vec![],
-        }
+        };
+        let username = credentials.name.to_lowercase();
+
+        match sqlx::query!(
+                    r#"
+                SELECT user_id, hash, enc_cert, suspended, suspended_reason FROM users WHERE username = $1
+                "#,
+                    username
+                )
+                .fetch_one(db)
+                .await {
+            Ok(r) => {
+                lazy_static! {
+                    static ref ARGON2: Argon2<'static> = Argon2::default();
+                }
+
+                let hash = PasswordHash::new(&r.hash).expect("Invalid password hash in the database");
+                if ARGON2.verify_password(&credentials.hash.0, &hash).is_ok() {
+                    match r.suspended {
+                        true => result.errors.push(
+                                AuthenticationError::UserSuspended(
+                                    UserSuspended {
+                                        description: format!(concat!(
+                                            "The user with the name `{}` authenticated successfully ",
+                                            "but is suspended. ",
+                                            "Note: You may want to look at the `reason` field ",
+                                            "for additional information which can be used in an ",
+                                            "aplication. ",
+                                        ), username),
+                                        reason: r.suspended_reason,
+                                        since: None // we don't even store this yet
+                                    }
+                                )
+                            ),
+                        false => {
+                            let (access_token, refresh_token) = create_session(encoding_key, r.user_id, None, db).await;
+                            result.user = Some(
+                                AuthenticatedUser {
+                                    name: username,
+                                    id: ID(r.user_id.to_string()),
+                                    certificate: PrivateCertificate { cert: Cert::from_bytes(&r.enc_cert).expect("Certificate from database not valid")},
+                                    token: TokenPair { access_token, refresh_token }
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    result.errors.push(AuthenticationError::InvalidMasterPasswordHash(InvalidMasterPasswordHash {
+                        description: concat!(
+                            "The master password hash didn't match the hash of the master password hash ",
+                            "stored in the database. ",
+                            "Note: be sure to correctly derive the master password hash from the user's ",
+                            "password and username and that you didn't send the (stretched) master key. ",
+                            "For help, see https://bitwarden.com/help/article/bitwarden-security-white-paper/",
+                            "#overview-of-the-master-password-hashing-key-derivation-and-encryption-process",
+                        ).to_string()
+                    }))
+                }
+            },
+            Err(_) => {
+                result.errors.push(AuthenticationError::UnknownUser(UnknownUser { description: format!("Found no user with name `{}`", credentials.name)}))
+            }
+        };
+        result
     }
 
     async fn refresh_token(&self, ctx: &Context<'_>, refresh_token: String) -> RefreshTokenResult {
