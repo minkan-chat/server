@@ -676,6 +676,8 @@ impl Mutation {
         result
     }
 
+    /// A client might obtain a new ``TokenPair`` from this endpoint.
+    /// The client sends its refresh token (a String with a JWT) and the server returns a new ``TokenPair``.
     async fn refresh_token(&self, ctx: &Context<'_>, refresh_token: String) -> RefreshTokenResult {
         let decoding_key = ctx.data::<DecodingKey>().unwrap();
         let encoding_key = ctx.data::<EncodingKey>().unwrap();
