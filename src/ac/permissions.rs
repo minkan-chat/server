@@ -1,20 +1,21 @@
+use bitflags::bitflags;
 
-
-// Note: If you're adding a constant here, you have to add it to the test at `crate::tests::permissions::test_bitflag_overlapping` too.
-pub(crate) const MESSAGE_READ: u64 = 0b0000000000000000000000000000000000000000000000000000000000000001;
-pub(crate) const MESSAGE_SEND: u64 = 0b0000000000000000000000000000000000000000000000000000000000000010;
-pub(crate) const MESSAGE_EDIT: u64 = 0b0000000000000000000000000000000000000000000000000000000000000100;
-pub(crate) const MESSAGE_DELETE: u64 = 0b0000000000000000000000000000000000000000000000000000000000001000;
-pub(crate) const MESSAGE_DELETE_OWNED: u64 = 0b0000000000000000000000000000000000000000000000000000000000010000;
-pub(crate) const CHANNEL_CREATE: u64 = 0b0000000000000000000000000000000000000000000000000000000000100000;
-pub(crate) const CHANNEL_EDIT: u64 = 0b0000000000000000000000000000000000000000000000000000000001000000;
-pub(crate) const CHANNEL_DELETE: u64 = 0b0000000000000000000000000000000000000000000000000000000010000000;
-pub(crate) const USER_INVITE: u64 = 0b0000000000000000000000000000000000000000000000000000000100000000;
-pub(crate) const USER_EDIT: u64 = 0b0000000000000000000000000000000000000000000000000000001000000000;
-pub(crate) const USER_DELETE: u64 = 0b0000000000000000000000000000000000000000000000000000010000000000; 
-pub(crate) const USER_SUSPEND: u64 = 0b0000000000000000000000000000000000000000000000000000100000000000;
-
-
+bitflags! {
+        struct Flags: u64 {
+            const MESSAGE_READ = 1 << 0;
+            const MESSAGE_SEND = 1 << 1;
+            const MESSAGE_EDIT = 1 << 2;
+            const MESSAGE_DELETE = 1 << 3;
+            const MESSAGE_DELETE_OWNED = 1 << 4;
+            const CHANNEL_CREATE = 1 << 5;
+            const CHANNEL_EDIT = 1 << 6;
+            const CHANNEL_DELETE = 1 << 7;
+            const USER_INVITE = 1 << 8;
+            const USER_EDIT = 1 << 9;
+            const USER_DELETE = 1 << 10;
+            const USER_SUSPEND = 1 << 11;
+        }
+}
 
 
 pub enum Permission {
@@ -41,24 +42,14 @@ pub enum Permission {
     /// Delete another user's account
     UserDelete,
     /// Suspend another user's account
-    UserSuspend
+    UserSuspend,
 }
 
-pub fn get_bitflag(permission: Permission) -> u64 {
-    match permission {
-        Permission::MessageRead => MESSAGE_READ,
-        Permission::MessageSend => MESSAGE_SEND,
-        Permission::MessageEdit => MESSAGE_EDIT,
-        Permission::MessageDelete => MESSAGE_DELETE,
-        Permission::MessageDeleteOwned => MESSAGE_DELETE_OWNED,
-        Permission::ChannelCreate => CHANNEL_CREATE,
-        Permission::ChannelEdit => CHANNEL_EDIT,
-        Permission::ChannelDelete => CHANNEL_DELETE,
-        Permission::UserInvite => USER_INVITE,
-        Permission::UserEdit => USER_EDIT,
-        Permission::UserDelete => USER_DELETE,
-        Permission::UserSuspend => USER_SUSPEND,
+/// This checks whether a given sum includes a permission
+pub fn check_permission(sum: u64, permission: u64) -> bool {
+    if permission < 64 {
+        sum & permission != 0
+    } else {
+        false
     }
-
 }
-
