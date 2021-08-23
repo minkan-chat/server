@@ -24,7 +24,6 @@ const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
 
 mod ac;
 mod models;
-pub mod tests;
 
 #[post("/graphql")]
 async fn graphql(
@@ -89,8 +88,6 @@ impl<'de> Deserialize<'de> for ServerCert {
 }
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("{:0b}", u128::MAX);
-
     pretty_env_logger::init();
     // Load config
     info!("Loading config ...");

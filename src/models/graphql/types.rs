@@ -1,5 +1,11 @@
 use async_graphql::{InputObject, Object, SimpleObject, Union, ID};
-use sequoia_openpgp::{serialize::SerializeInto, Cert};
+use sequoia_openpgp::{
+    crypto::mpi::PublicKey,
+    policy::{Policy, StandardPolicy},
+    serialize::SerializeInto,
+    types::Curve,
+    Cert,
+};
 
 use super::scalars::{Bytes, DateTime};
 
@@ -41,6 +47,7 @@ impl PrivateCertificate {
     pub(crate) async fn content(&self) -> Bytes {
         Bytes(bytes::Bytes::from(
             self.cert
+                .as_tsk()
                 .to_vec()
                 .expect("Certificate from the database is valid"),
         ))
@@ -232,4 +239,72 @@ pub(crate) struct ExpiredRefreshToken {
 pub(crate) struct TokenPair {
     pub(crate) access_token: String,
     pub(crate) refresh_token: String,
+}
+
+#[derive(Debug)]
+pub struct SignalCompliantPolcy<'a>(StandardPolicy<'a>);
+
+impl<'a> Default for SignalCompliantPolcy<'a> {
+    fn default() -> Self {
+        Self(StandardPolicy::default())
+    }
+}
+
+impl<'a> Policy for SignalCompliantPolcy<'a> {
+    fn key(
+        &self,
+        ka: &sequoia_openpgp::cert::prelude::ValidErasedKeyAmalgamation<
+            sequoia_openpgp::packet::key::PublicParts,
+        >,
+    ) -> sequoia_openpgp::Result<()> {
+        if ka.key_expiration_time().is_some() {
+            anyhow::bail!("Only keys without an expiration time are supported.");
+        }
+        match ka.has_unencrypted_secret() {
+            true => anyhow::bail!("Found unencypted secret."),
+            false => (),
+        }
+
+        match ka.mpis() {
+            PublicKey::EdDSA { curve: _, q: _ } => {
+                // EdDSA is only used with curve 25519
+                self.0.key(ka)
+            }
+            PublicKey::ECDH {
+                curve,
+                hash: _,
+                q: _,
+                sym: _,
+            } => match curve {
+                Curve::Cv25519 => self.0.key(ka), // fallback to the standard policy to check other parts of the key
+                _ => anyhow::bail!("Only ECDH with curve 25519 is supported."),
+            },
+            _ => anyhow::bail!("Only curve 25519 ciphersuites are supported."),
+        }
+    }
+    fn signature(
+        &self,
+        sig: &sequoia_openpgp::packet::Signature,
+        sec: sequoia_openpgp::policy::HashAlgoSecurity,
+    ) -> sequoia_openpgp::Result<()> {
+        self.0.signature(sig, sec)
+    }
+
+    fn symmetric_algorithm(
+        &self,
+        algo: sequoia_openpgp::types::SymmetricAlgorithm,
+    ) -> sequoia_openpgp::Result<()> {
+        self.0.symmetric_algorithm(algo)
+    }
+
+    fn aead_algorithm(
+        &self,
+        algo: sequoia_openpgp::types::AEADAlgorithm,
+    ) -> sequoia_openpgp::Result<()> {
+        self.0.aead_algorithm(algo)
+    }
+
+    fn packet(&self, packet: &sequoia_openpgp::Packet) -> sequoia_openpgp::Result<()> {
+        self.0.packet(packet)
+    }
 }

@@ -31,6 +31,7 @@ argon2 = "0.2"
 regex = "1.5.4"
 lazy_static = "1.4.0"
 jsonwebtoken = "8.0.0-beta.2"
+anyhow = "1.0.43"
 
 # for windows uncomment this
 # [target.'cfg(windows)'.dependencies] does not work due to https://github.com/rust-lang/cargo/issues/1197

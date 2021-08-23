@@ -43,11 +43,10 @@ mod helpers {
     use serde::{Deserialize, Serialize};
 
     use crate::models::graphql::types::{
-        CertificateTaken, InvalidUsername, TokenPair, UsernameUnavailable,
+        CertificateTaken, InvalidUsername, SignalCompliantPolcy, TokenPair, UsernameUnavailable,
     };
 
     use super::*;
-    // Write tests for helper methods
 
     #[cfg(test)]
     mod tests {
@@ -60,23 +59,32 @@ mod helpers {
 
         // TODO: get external verified test vectors
 
-        const CLIENT_CERT_ARMOR: &[u8] = include_bytes!("../../../other/test_keys/client.asc");
-        const CLIENT_CERT: &[u8] = include_bytes!("../../../other/test_keys/client.pgp");
-        const CLIENT_CERT_FINGERPRINT: &str = "E5614CD3EAB9A60B1DB9F221E9AE9ECA69251D3F";
+        const CLIENT_CERT_ARMOR: &[u8] = include_bytes!("../../../other/test_keys/erik.asc");
+        const CLIENT_CERT: &[u8] = include_bytes!("../../../other/test_keys/erik.pgp");
+        const CLIENT_CERT_FINGERPRINT: &str = "D3DD6935E854E0413634A712D0BF2A3CF9099BEF";
 
         const CLIENT_KEYRING_ARMOR: &[u8] =
-            include_bytes!("../../../other/test_keys/client_keyring.asc");
-        const CLIENT_KEYRING: &[u8] = include_bytes!("../../../other/test_keys/client_keyring.pgp");
+            include_bytes!("../../../other/test_keys/erik_bob_keyring.asc");
+        const CLIENT_KEYRING: &[u8] =
+            include_bytes!("../../../other/test_keys/erik_bob_keyring.pgp");
 
-        const CHALLENGE: &str = "ba7b10e7-bcb3-4c4a-9a10-b132a08f3b92";
-        const INVALID_CHALLENGE: &str = "f1e3a8aa-e1ab-46ec-bff2-22f19a7c2137";
+        const CHALLENGE: &str = "cffbfa704053bd3c26df1debe1076957477edee8f597c79ac7e6ca6d7aba12f5";
+        const INVALID_CHALLENGE: &str =
+            "36729f32befa1d1bdbb6413279cc3aa7b9070fc62900c7cbd674499d920b5bab";
 
         // TODO: get better source for the test vector
         const SIGNATURE: &[u8] = include_bytes!("../../../other/test_keys/challenge_signature.pgp");
-
+        const SIGNATURE_FOR_OTHER_CHALLENGE: &[u8] =
+            include_bytes!("../../../other/test_keys/signature_for_other_challenge.pgp");
         // the signature itself is valid but made by another user's key
-        const INVALID_SIGNATURE: &[u8] =
-            include_bytes!("../../../other/test_keys/invalid_challenge_signature.pgp");
+        const SIGNATURE_BY_OTHER_USER: &[u8] =
+            include_bytes!("../../../other/test_keys/challenge_signature_by_other_user.pgp");
+
+        const CLIENT_INVALID_KEY_ALGO: &[u8] =
+            include_bytes!("../../../other/test_keys/carl_invalid_key_algo.pgp");
+
+        const CLIENT_CERT_EXPIRATION_DATE: &[u8] =
+            include_bytes!("../../../other/test_keys/david_cert_with_expiration_date.pgp");
 
         #[test]
         fn test_parse_cert() {
@@ -128,6 +136,24 @@ mod helpers {
                 e.len(),
                 "parse_cert failed to parse the cert but did not add an error"
             );
+
+            e.clear();
+
+            assert!(parse_cert(
+                &Bytes(bytes::Bytes::from_static(CLIENT_INVALID_KEY_ALGO)),
+                &mut e
+            )
+            .is_none());
+            assert!(!e.is_empty());
+
+            e.clear();
+
+            assert!(parse_cert(
+                &Bytes(bytes::Bytes::from_static(CLIENT_CERT_EXPIRATION_DATE)),
+                &mut e
+            )
+            .is_none());
+            assert!(!e.is_empty())
         }
 
         #[test]
@@ -188,29 +214,49 @@ mod helpers {
             );
             assert!(e.is_empty());
 
-            let invalid = validate_challenge(INVALID_CHALLENGE, &mut sig, &cert, &mut e);
+            let valid = validate_challenge(INVALID_CHALLENGE, &mut sig, &cert, &mut e);
             assert!(
-                !invalid,
-                "validate_challenge validate a invalid challenge as valid!"
+                !valid,
+                "validate_challenge validate a signature for another challenge as valid!"
             );
             assert_eq!(e.len(), 1);
 
             e.clear();
 
             // a signature that is for another challenge
-            let mut sig =
-                parse_signature(&Bytes(bytes::Bytes::from_static(INVALID_SIGNATURE)), &mut e)
-                    .unwrap_or_else(|| {
-                        panic!("parse_signature failed to parse a cryptically valid signature")
-                    });
+            let mut sig = parse_signature(
+                &Bytes(bytes::Bytes::from_static(SIGNATURE_FOR_OTHER_CHALLENGE)),
+                &mut e,
+            )
+            .unwrap_or_else(|| {
+                panic!("parse_signature failed to parse a cryptographically valid signature")
+            });
             assert!(e.is_empty());
 
-            let invalid = validate_challenge(CHALLENGE, &mut sig, &cert, &mut e);
+            let valid = validate_challenge(CHALLENGE, &mut sig, &cert, &mut e);
             assert!(
-                !invalid,
+                !valid,
                 "validate_challenge validated a signature from another challenge as valid"
             );
             assert_eq!(1, e.len());
+
+            e.clear();
+
+            // a challenge which is cryptographically ok but made with another user's key
+            let mut sig = parse_signature(
+                &Bytes(bytes::Bytes::from_static(SIGNATURE_BY_OTHER_USER)),
+                &mut e,
+            )
+            .unwrap_or_else(|| {
+                panic!("parse_signature failed to parse a cryptographically valid signature")
+            });
+
+            let valid = validate_challenge(CHALLENGE, &mut sig, &cert, &mut e);
+            assert!(
+                !valid,
+                "validate_challenge accepted a signature from another user as valid."
+            );
+            assert_eq!(e.len(), 1, "validate_challenge didn't add an error!");
         }
     }
 
@@ -398,24 +444,124 @@ mod helpers {
 
     /// Helper method to parse a [``sequoia_openpgp::cert::Cert``] and add the GraphQL errors if needed
     pub(super) fn parse_cert(cert: &Bytes, errors: &mut Vec<SignupError>) -> Option<Cert> {
-        // TODO: add cert policy/check that the Certificate has C E A S keys that all work with the signal/mls protocol
+        let error_count = errors.len();
+        let mut result = None;
         // TODO: make sure to remove certifications from other users.
-        if let Ok(cert) = Cert::from_bytes(&cert.0) {
-            if cert.is_tsk() {
-                return Some(cert);
-            } else {
-                errors.push(SignupError::InvalidCertificate(InvalidCertificate {
-                    description: "Certificate is valid but has no encrypted secret parts. Note: Signature not checked."
+        match Cert::from_bytes(&cert.0) {
+            Ok(cert) => {
+                match cert.with_policy(&SignalCompliantPolcy::default(), None) {
+                    Ok(cert) => {
+                        // Checks if more than one key for each operation is present
+                        // Signing, Authentication, Encryption, Certification
+                        let mut keys = (false, false, false, false);
+                        let mut has_unencrypted_secrets = false;
+                        cert.keys().for_each(|key| {
+                            has_unencrypted_secrets = key.has_unencrypted_secret();
+
+                            if key.for_signing() {
+                                match keys.0 {
+                                    true => errors.push(SignupError::InvalidCertificate(
+                                        InvalidCertificate {
+                                            description: "Found more than one signing key in certificate.".to_string()
+                                        }
+                                    )),
+                                    false => keys.0 = true
+                                }
+                            }
+
+                            if key.for_authentication() {
+                                match keys.1 {
+                                    true => errors.push(SignupError::InvalidCertificate(InvalidCertificate {
+                                        description:
+                                            "Found more than one authentication key in certificate."
+                                                .to_string(),
+                                    })),
+                                    false => keys.1 = true,
+                                }
+                            }
+
+                            if key.for_storage_encryption() && key.for_transport_encryption() {
+                                match keys.2 {
+                                    true => errors.push(SignupError::InvalidCertificate(
+                                        InvalidCertificate {
+                                            // We might accept multiple encryption keys some time in the future
+                                            // IF we add smart card support
+                                            description: concat!(
+                                                "Found more than one key for encryption. ",
+                                                "Note: This key is for both transport and ",
+                                                "storage encryption which is valid."
+                                            ).to_string()
+                                        }
+                                    )),
+                                    false => keys.2 = true,
+                                }
+                            }
+                            if (key.for_storage_encryption() && !key.for_transport_encryption()) || (key.for_transport_encryption() && !key.for_storage_encryption()) {
+                                errors.push(SignupError::InvalidCertificate(
+                                    InvalidCertificate {
+                                        description: concat!(
+                                            "Found a key which is only for storage encryption or only for transport encryption. ",
+                                            "This is considered invalid. A key must be for both storage and transport encryption. ",
+                                            "Note: Most PGP implementation don't distinguish between these operation and will just ",
+                                            "say ``encyption``. E.g. GnuPG does it this way."
+                                        ).to_string()
+                                    }
+                                ))
+                            }
+
+                            if key.for_certification() {
+                                match keys.3 {
+                                    true => errors.push(
+                                        SignupError::InvalidCertificate(
+                                            InvalidCertificate {
+                                                description: concat!(
+                                                    "Found more than one key for certification. ",
+                                                    "Note: Since the certification is the primary ",
+                                                    "key, this means this certificate has more than",
+                                                    "one primary key, which is really wrong."
+                                                ).to_string()
+                                            }
+                                        )
+                                    ),
+                                    false => keys.3 = true,
+                                }
+                            }
+                        });
+
+                        match keys {
+                            (true, true, true, true) => {
+                                if errors.len() == error_count {
+                                    result = Some(cert.cert().clone())
+                                }
+                            }
+                            _ => errors.push(SignupError::InvalidCertificate(InvalidCertificate {
+                                description: concat!(
+                                    "The certificate is missing one or more key parts ",
+                                    "Note: Look for other errors which tell you which keys ",
+                                    "are missing."
+                                )
+                                .to_string(),
+                            })),
+                        }
+                    }
+                    Err(_) => errors.push(SignupError::InvalidCertificate(InvalidCertificate {
+                        description: concat!(
+                            "The primary key does not match the key policy. ",
+                            "Note: Only Curve 25519 keys WITHOUT a expiration ",
+                            "date are supported."
+                        )
                         .to_string(),
-                }))
+                    })),
+                }
             }
-        } else {
-            errors.push(SignupError::InvalidCertificate(InvalidCertificate {
-                description: "Failed to parse certificate. Note: Signature not checked."
-                    .to_string(),
-            }));
+            Err(_) => {
+                errors.push(SignupError::InvalidCertificate(InvalidCertificate {
+                    description: "Failed to parse certificate. Note: Signature not checked."
+                        .to_string(),
+                }));
+            }
         }
-        None
+        result
     }
 
     /// Adds the user or an error to the Result
@@ -426,6 +572,11 @@ mod helpers {
         db: &PgPool,
         key: &EncodingKey,
     ) {
+        assert!(
+            cert.is_tsk(),
+            "Certificate has no secret parts. Parse_cert should've checked that."
+        );
+
         let r = sqlx::query!(
             // insert the user into the users table, let the database generate a uuid,
             // insert the public certificate into the pubkeys table with the uuid as
