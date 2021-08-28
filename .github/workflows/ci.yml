@@ -28,6 +28,7 @@ jobs:
       with:
         profile: minimal
         toolchain: ${{ matrix.rust-version }}
+    - uses: Swatinem/rust-cache@v1
     - name: Build development
       uses: actions-rs/cargo@v1
       with:
@@ -41,7 +42,7 @@ jobs:
   test:
     strategy:
       matrix:
-        rust-version: ['stable', 'beta', 'nightly']
+        rust-version: [stable, beta, nightly]
     name: Test on Ubuntu with nettle
     runs-on: ubuntu-latest
     
@@ -54,6 +55,7 @@ jobs:
       with:
         profile: minimal
         toolchain: ${{ matrix.rust-version }}
+    - uses: Swatinem/rust-cache@v1
     - name: Test development
       uses: actions-rs/cargo@v1
       with:
