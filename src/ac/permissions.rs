@@ -17,6 +17,7 @@ bitflags! {
         }
 }
 
+#[allow(dead_code)]
 pub enum Permission {
     /// Read the messages from a given textchannel
     MessageRead,
