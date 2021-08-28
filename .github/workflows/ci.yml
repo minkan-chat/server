@@ -18,7 +18,7 @@ jobs:
         rust-version: [stable, beta, nightly]
         checks:
         - advisories
-        - bans licenses source
+        - bans licenses sources
     name: Run cargo clippy and deny on Ubuntu
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.checks == 'advisories' }}
