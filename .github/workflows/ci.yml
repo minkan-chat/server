@@ -26,7 +26,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Set crypto-backend 
-    - run: |
+      run: |
         if [ ${{matrix.os}} = "windows-latest" ] ; then
           echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
         fi
@@ -63,7 +63,7 @@ jobs:
     steps:
     # workaround until we have no dependencies with c dependencies
     - name: Set crypto-backend 
-    - run: |
+      run: |
         if [ ${{matrix.os}} = "windows-latest" ] ; then
           echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
         fi
@@ -103,7 +103,7 @@ jobs:
     steps:
     # workaround until we have no dependencies with c dependencies
     - name: Set crypto-backend 
-    - run: |
+      run: |
         if [ ${{matrix.os}} = "windows-latest" ] ; then
           echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
         fi
