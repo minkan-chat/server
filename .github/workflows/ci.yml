@@ -31,11 +31,11 @@ jobs:
           echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
         fi
     - name: Install dependencies for Ubuntu
-      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: Install dependencies for macOS
-      if: ${{ matrix.os == 'macos-latest' }}
       run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
     # crypo backend CNG is present on windows
     - uses: actions-rs/toolchain@v1
       with:
@@ -69,11 +69,11 @@ jobs:
         fi
     - uses: actions/checkout@v2
     - name: Install dependencies for Ubuntu
-      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: Install dependencies for macOS
-      if: ${{ matrix.os == 'macos-latest' }}
       run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
     # crypo backend CNG is present on windows
     - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
@@ -109,11 +109,11 @@ jobs:
         fi
     - uses: actions/checkout@v2
     - name: Install dependencies for Ubuntu
-      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: Install dependencies for macOS
-      if: ${{ matrix.os == 'macos-latest' }}
       run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
     # crypo backend CNG is present on windows
     - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
