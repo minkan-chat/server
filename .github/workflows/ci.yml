@@ -47,10 +47,12 @@ jobs:
       uses: actions-rs/clippy-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        args: ${{ env.FEATURE_FLAGS }}
     - name: Run cargo-deny on rust ${{ matrix.rust-version }}
       uses: EmbarkStudios/cargo-deny-action@v1
       with:
         command: check ${{ matrix.checks }}
+        arguments: ${{ env.FEATURE_FLAGS }}
 
   build:
     strategy:
@@ -85,13 +87,13 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --verbose ${{ FEATURE_FLAGS }}
+        args: --verbose ${{ env.FEATURE_FLAGS }}
       
     - name: Build release
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --verbose --release ${{ FEATURE_FLAGS }}
+        args: --verbose --release ${{ env.FEATURE_FLAGS }}
   test:
     strategy:
       matrix:
@@ -125,9 +127,9 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --verbose ${{ FEATURE_FLAGS }}
+        args: --verbose ${{ env.FEATURE_FLAGS }}
     - name: Test release
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --release --verbose ${{ FEATURE_FLAGS }}
+        args: --release --verbose ${{ env.FEATURE_FLAGS }}
