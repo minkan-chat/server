@@ -32,11 +32,13 @@ regex = "1.5.4"
 lazy_static = "1.4.0"
 jsonwebtoken = "8.0.0-beta.2"
 anyhow = "1.0.43"
+sequoia-openpgp = { version = "1.3", default-features = false}
 
-# for windows uncomment this
-# [target.'cfg(windows)'.dependencies] does not work due to https://github.com/rust-lang/cargo/issues/1197
-# sequoia-openpgp = { version = "1.3", default-features = false, features = ["crypto-cng"] }
-
-# for linux uncomment this
-# [target.'cfg(unix)'.dependencies]
-sequoia-openpgp = { version = "1.3", default-features = false, features = ["crypto-nettle",]}
+[features]
+# This is a workaround for https://github.com/rust-lang/cargo/issues/1197
+# On windows disable default features when building and enable the "win" feature
+# We won't need this anymore if Cargo supports target feature flags or we have
+# a full rust crypto backend (no c/c++ dependencies).
+default = ["unix"]
+win = ["sequoia-openpgp/crypto-cng"]
+unix = ["sequoia-openpgp/crypto-nettle"]
