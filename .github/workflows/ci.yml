@@ -1,0 +1,146 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [main, staging, trying]
+  pull_request:
+    branches:
+      - '**'
+
+env:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: true
+  
+jobs:
+  checks:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust-version: [stable, beta, nightly]
+        checks:
+        - advisories
+        - bans licenses sources
+    name: Cargo clippy & deny on ${{ matrix.os }} with rust ${{ matrix.rust-version }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set crypto-backend 
+      shell: bash
+      run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
+    - name: Install dependencies for Ubuntu
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: Install dependencies for macOS
+      run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
+    # crypo backend CNG is present on windows
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+        components: clippy
+    - uses: Swatinem/rust-cache@v1
+    - name: Run cargo-clippy on rust ${{ matrix.rust-version }}
+      uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: ${{ env.FEATURE_FLAGS }}
+    - name: Run cargo-deny on rust ${{ matrix.rust-version }}
+      uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        command: check ${{ matrix.checks }}
+        arguments: ${{ env.FEATURE_FLAGS }}
+
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        rust-version: [stable, beta, nightly]
+    name: Build with ${{ matrix.rust-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    # workaround until we have no dependencies with c dependencies
+    - name: Set crypto-backend 
+      shell: bash
+      run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
+    - uses: actions/checkout@v2
+    - name: Install dependencies for Ubuntu
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: Install dependencies for macOS
+      run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
+    # crypo backend CNG is present on windows
+    - name: Setting up toolchain rust ${{ matrix.rust-version }}
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+    - uses: Swatinem/rust-cache@v1
+    - name: Build development
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --verbose ${{ env.FEATURE_FLAGS }}
+      
+    - name: Build release
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --verbose --release ${{ env.FEATURE_FLAGS }}
+  test:
+    strategy:
+      matrix:
+        rust-version: [stable, beta, nightly]
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    name: Test with rust ${{ matrix.rust-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    # workaround until we have no dependencies with c dependencies
+    - name: Set crypto-backend 
+      shell: bash
+      run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
+    - uses: actions/checkout@v2
+    - name: Install dependencies for Ubuntu
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: Install dependencies for macOS
+      run: brew install nettle
+      if: ${{ matrix.os == 'macos-latest' }}
+    # crypo backend CNG is present on windows
+    - name: Setting up toolchain rust ${{ matrix.rust-version }}
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+    - uses: Swatinem/rust-cache@v1
+    - name: Test development
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --verbose ${{ env.FEATURE_FLAGS }}
+    - name: Test release
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --verbose ${{ env.FEATURE_FLAGS }}
+
+  done:
+    name: Done
+    needs: [build, test, checks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Done
+        run: echo "Done"
