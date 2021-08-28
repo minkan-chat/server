@@ -15,17 +15,28 @@ jobs:
   checks:
     strategy:
       matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
         rust-version: [stable, beta, nightly]
         checks:
         - advisories
         - bans licenses sources
-    name: Run cargo clippy and deny on Ubuntu
-    runs-on: ubuntu-latest
+    name: Run cargo clippy and deny on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
     - uses: actions/checkout@v2
-    - name: Install dependencies
+    - name: Set crypto-backend 
+    - run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
+    - name: Install dependencies for Ubuntu
+      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - name: Install dependencies for macOS
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: brew install nettle
+    # crypo backend CNG is present on windows
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -44,14 +55,26 @@ jobs:
   build:
     strategy:
       matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
         rust-version: [stable, beta, nightly]
-    name: Build on Ubuntu with nettle
-    runs-on: ubuntu-latest
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     
     steps:
+    # workaround until we have no dependencies with c dependencies
+    - name: Set crypto-backend 
+    - run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
     - uses: actions/checkout@v2
-    - name: Install dependencies
+    - name: Install dependencies for Ubuntu
+      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - name: Install dependencies for macOS
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: brew install nettle
+    # crypo backend CNG is present on windows
     - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
       with:
@@ -61,25 +84,37 @@ jobs:
     - name: Build development
       uses: actions-rs/cargo@v1
       with:
-        command: build  
-        args: --verbose
+        command: build
+        args: --verbose ${{ FEATURE_FLAGS }}
       
     - name: Build release
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --verbose --release
+        args: --verbose --release ${{ FEATURE_FLAGS }}
   test:
     strategy:
       matrix:
         rust-version: [stable, beta, nightly]
+        os: [windows-latest, ubuntu-latest, macos-latest]
     name: Test on Ubuntu with nettle
     runs-on: ubuntu-latest
     
     steps:
+    # workaround until we have no dependencies with c dependencies
+    - name: Set crypto-backend 
+    - run: |
+        if [ ${{matrix.os}} = "windows-latest" ] ; then
+          echo "FEATURE_FLAGS=--no-default-features --features=win" >> $GITHUB_ENV
+        fi
     - uses: actions/checkout@v2
-    - name: Install dependencies
+    - name: Install dependencies for Ubuntu
+      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - name: Install dependencies for macOS
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: brew install nettle
+    # crypo backend CNG is present on windows
     - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
       with:
@@ -90,9 +125,9 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --verbose
+        args: --verbose ${{ FEATURE_FLAGS }}
     - name: Test release
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --release --verbose
+        args: --release --verbose ${{ FEATURE_FLAGS }}
