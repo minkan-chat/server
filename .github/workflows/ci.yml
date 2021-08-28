@@ -12,6 +12,35 @@ env:
   SQLX_OFFLINE: true
   
 jobs:
+  checks:
+    strategy:
+      matrix:
+        rust-version: [stable, beta, nightly]
+        checks:
+        - advisories
+        - bans licenses source
+    name: Run cargo clippy and deny on Ubuntu
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+        components: clippy
+    - uses: Swatinem/rust-cache@v1
+    - name: Run cargo-clippy on rust ${{ matrix.rust-version }}
+      uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run cargo-deny on rust ${{ matrix.rust-version }}
+      uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        command: check ${{ matrix.checks }}
+
   build:
     strategy:
       matrix:
@@ -23,7 +52,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install dependencies
       run: sudo apt install -y clang llvm pkg-config nettle-dev
-    - name: Build with rust ${{ matrix.rust-version }}
+    - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -32,8 +61,9 @@ jobs:
     - name: Build development
       uses: actions-rs/cargo@v1
       with:
-        command: build
+        command: build  
         args: --verbose
+      
     - name: Build release
       uses: actions-rs/cargo@v1
       with:
@@ -50,7 +80,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install dependencies
       run: sudo apt install -y clang llvm pkg-config nettle-dev
-    - name: Test with rust ${{ matrix.rust-version }}
+    - name: Setting up toolchain rust ${{ matrix.rust-version }}
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
