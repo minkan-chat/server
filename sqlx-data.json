@@ -1,3 +1,157 @@
 {
-  "db": "PostgreSQL"
+  "db": "PostgreSQL",
+  "097743e7168685ac30be25bd68d7ad1312727972464ce604de2bf479fa915712": {
+    "query": "\n            SELECT token_expiry FROM users WHERE user_id = $1\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "token_expiry",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "3157d4355b78f106dbb97b96043eb5e47fc0b4a726e8b170e2bccbed5d537988": {
+    "query": "\n        SELECT exists(SELECT 1 FROM denied_tokens WHERE \"token_id\" = $1)\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "exists",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
+  "44cf6acb2360fc02169a093e2d4bbee7fd463672da2e020911058169a9c4c3c3": {
+    "query": "\n        UPDATE users SET token_expiry = $1 WHERE user_id = $2\n        ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "4e89235b8135ec00768d711d0539b0d17f4c7d0f910e7442d58c77e5243dc43f": {
+    "query": "\n            WITH user_result AS (\n                INSERT INTO users ( username, hash, enc_cert ) \n                VALUES ( $1, $2, $3 )\n                RETURNING user_id\n            )\n            INSERT INTO pub_certs ( user_id, cert_fingerprint, pub_cert ) VALUES (\n                ( SELECT user_id from user_result ), $4, $5\n            ) RETURNING (SELECT user_id FROM user_result)\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Text",
+          "Bytea",
+          "Varchar",
+          "Bytea"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
+  "70c3bb186a2e133b97eae3ee11edc42d095202b74560beaf840ae54ffe64fccc": {
+    "query": "\n                DELETE FROM session_info WHERE session_id = $1",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "73d5efa6d33ffafd10cdb64c75ef4028a65515eca07797b714eb25afc9dbaedc": {
+    "query": "\n        INSERT INTO session_info (\n            user_id,\n            session_name\n        ) VALUES ($1, $2)\n        RETURNING session_id\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "session_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Varchar"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "8babdd2f673b17eb2efacd131eb26e24a9cde59f0f0e27715972e1d933a251c6": {
+    "query": "\n                SELECT user_id, hash, enc_cert, suspended, suspended_reason FROM users WHERE username = $1\n                ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "hash",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 2,
+          "name": "enc_cert",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 3,
+          "name": "suspended",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 4,
+          "name": "suspended_reason",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  }
 }
