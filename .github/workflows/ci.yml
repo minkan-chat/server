@@ -1,1 +1,66 @@
+name: Rust
 
+on:
+  push:
+    branches: [main, staging, trying]
+  pull_request:
+    branches:
+      - "**'
+
+env:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: true
+  
+jobs:
+  build:
+    strategy:
+      matrix:
+        rust-version: ['stable', 'beta', 'nightly']
+    name: Build on Ubuntu with nettle
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - name: Build with rust ${{ matrix.rust-version }}
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+      - name: Build development
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose
+      - name: Build release
+          uses: actions-rs/cargo@v1
+          with:
+            command: build
+            args: --verbose --release
+  test:
+    strategy:
+      matrix:
+        rust-version: ['stable', 'beta', 'nightly']
+    name: Test on Ubuntu with nettle
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo apt install -y clang llvm pkg-config nettle-dev
+    - name: Test with rust ${{ matrix.rust-version }}
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{ matrix.rust-version }}
+      - name: Test development
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose
+      - name: Test release
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --verbose
