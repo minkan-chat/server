@@ -15,12 +15,12 @@ jobs:
   checks:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         rust-version: [stable, beta, nightly]
         checks:
         - advisories
         - bans licenses sources
-    name: Run cargo clippy and deny on ${{ matrix.os }}
+    name: Cargo clippy & deny on ${{ matrix.os }} with rust ${{ matrix.rust-version }}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
@@ -60,7 +60,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
         rust-version: [stable, beta, nightly]
-    name: Build on ${{ matrix.os }}
+    name: Build with ${{ matrix.rust-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -101,7 +101,7 @@ jobs:
       matrix:
         rust-version: [stable, beta, nightly]
         os: [windows-latest, ubuntu-latest, macos-latest]
-    name: Test on ${{ matrix.os }}
+    name: Test with rust ${{ matrix.rust-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
     steps:
