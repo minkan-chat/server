@@ -99,8 +99,8 @@ jobs:
       matrix:
         rust-version: [stable, beta, nightly]
         os: [windows-latest, ubuntu-latest, macos-latest]
-    name: Test on Ubuntu with nettle
-    runs-on: ubuntu-latest
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     
     steps:
     # workaround until we have no dependencies with c dependencies
