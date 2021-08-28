@@ -15,7 +15,7 @@ jobs:
   build:
     strategy:
       matrix:
-        rust-version: ['stable', 'beta', 'nightly']
+        rust-version: [stable, beta, nightly]
     name: Build on Ubuntu with nettle
     runs-on: ubuntu-latest
     
@@ -28,16 +28,16 @@ jobs:
       with:
         profile: minimal
         toolchain: ${{ matrix.rust-version }}
-      - name: Build development
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --verbose
-      - name: Build release
-          uses: actions-rs/cargo@v1
-          with:
-            command: build
-            args: --verbose --release
+    - name: Build development
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --verbose
+    - name: Build release
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --verbose --release
   test:
     strategy:
       matrix:
@@ -54,13 +54,13 @@ jobs:
       with:
         profile: minimal
         toolchain: ${{ matrix.rust-version }}
-      - name: Test development
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --verbose
-      - name: Test release
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --release --verbose
+    - name: Test development
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --verbose
+    - name: Test release
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --verbose
