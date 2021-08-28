@@ -136,3 +136,11 @@ jobs:
       with:
         command: test
         args: --release --verbose ${{ env.FEATURE_FLAGS }}
+
+  done:
+    name: Done
+    needs: [build, test, checks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Done
+        run: echo "Done"
