@@ -39,7 +39,7 @@ mod helpers {
     use lazy_static::lazy_static;
     use log::{debug, info, warn};
     use moka::future::Cache;
-    use sequoia_openpgp::serialize::SerializeInto;
+    use sequoia_openpgp::{serialize::SerializeInto, types::SignatureType, Packet};
     use serde::{Deserialize, Serialize};
 
     use crate::models::graphql::types::{
@@ -50,12 +50,14 @@ mod helpers {
 
     #[cfg(test)]
     mod tests {
-        use sequoia_openpgp::serialize::MarshalInto;
+        use sequoia_openpgp::{parse::Parse, serialize::MarshalInto, Cert};
 
         use crate::models::graphql::{
             mutations::helpers::{parse_cert, parse_signature, validate_challenge},
             scalars::Bytes,
         };
+
+        use super::strip_certifications;
 
         // TODO: get external verified test vectors
 
@@ -86,6 +88,23 @@ mod helpers {
         const CLIENT_CERT_EXPIRATION_DATE: &[u8] =
             include_bytes!("../../../other/test_keys/david_cert_with_expiration_date.pgp");
 
+        const CLIENT_CERT_WITH_CERTIFICATION: &[u8] =
+            include_bytes!("../../../other/test_keys/issue_6/bob_certify_erik.asc");
+
+        #[test]
+        fn test_reject_cert_with_certification() {
+            let cert = Cert::from_bytes(CLIENT_CERT_WITH_CERTIFICATION).unwrap();
+            let count = cert.userids().next().unwrap().signatures().count();
+            assert_eq!(count, 2);
+            let cert = strip_certifications(cert).unwrap();
+            let valid_userid = cert.userids().next().unwrap();
+            assert_eq!(1, valid_userid.signatures().count());
+            assert_eq!(
+                1,
+                valid_userid.self_signatures().count(),
+                "removed a signature but it was the self signature"
+            );
+        }
         #[test]
         fn test_parse_cert() {
             // cert bytes but armor
@@ -273,6 +292,27 @@ mod helpers {
         pub(super) rft: bool,
     }
 
+    pub(crate) fn strip_certifications(cert: Cert) -> anyhow::Result<Cert> {
+        let fingerprint = cert.fingerprint();
+        let packets = cert.into_packets();
+        // packets of a certificate without any Certifications
+        let valid_packets = packets.filter(|packet| match packet {
+            Packet::Signature(sig) => match sig.typ() {
+                SignatureType::GenericCertification
+                | SignatureType::PersonaCertification
+                | SignatureType::CasualCertification
+                | SignatureType::PositiveCertification
+                | SignatureType::AttestationKey => {
+                    sig.issuer_fingerprints().all(|f| f == &fingerprint)
+                }
+                _ => true,
+            },
+
+            Packet::Unknown(_) => false,
+            _ => true,
+        });
+        Cert::from_packets(valid_packets)
+    }
     pub(super) async fn is_refresh_token_denied(claims: &Claims, db: &PgPool) -> bool {
         // TODO: consider caching denied refresh tokens
         sqlx::query!(
@@ -531,7 +571,8 @@ mod helpers {
                         match keys {
                             (true, true, true, true) => {
                                 if errors.len() == error_count {
-                                    result = Some(cert.cert().clone())
+                                    result =
+                                        Some(strip_certifications(cert.cert().clone()).unwrap())
                                 }
                             }
                             _ => errors.push(SignupError::InvalidCertificate(InvalidCertificate {

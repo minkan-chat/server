@@ -250,6 +250,17 @@ impl<'a> Default for SignalCompliantPolcy<'a> {
     }
 }
 
+macro_rules! disallow_unknown_and_private_variants {
+    ($e:path, $a:ident $(,)?) => {
+        use $e as base;
+        match $a {
+            base::Private(_) => anyhow::bail!("Private variants are not allowed."),
+            base::Unknown(_) => anyhow::bail!("Unknown variants are not allowed."),
+            _ => (),
+        };
+    };
+}
+
 impl<'a> Policy for SignalCompliantPolcy<'a> {
     fn key(
         &self,
@@ -287,6 +298,9 @@ impl<'a> Policy for SignalCompliantPolcy<'a> {
         sig: &sequoia_openpgp::packet::Signature,
         sec: sequoia_openpgp::policy::HashAlgoSecurity,
     ) -> sequoia_openpgp::Result<()> {
+        if let sequoia_openpgp::types::SignatureType::Unknown(_) = sig.typ() {
+            anyhow::bail!("Unknown variants are not allowed.");
+        }
         self.0.signature(sig, sec)
     }
 
@@ -294,6 +308,7 @@ impl<'a> Policy for SignalCompliantPolcy<'a> {
         &self,
         algo: sequoia_openpgp::types::SymmetricAlgorithm,
     ) -> sequoia_openpgp::Result<()> {
+        disallow_unknown_and_private_variants!(sequoia_openpgp::types::SymmetricAlgorithm, algo);
         self.0.symmetric_algorithm(algo)
     }
 
@@ -301,10 +316,14 @@ impl<'a> Policy for SignalCompliantPolcy<'a> {
         &self,
         algo: sequoia_openpgp::types::AEADAlgorithm,
     ) -> sequoia_openpgp::Result<()> {
+        disallow_unknown_and_private_variants!(sequoia_openpgp::types::AEADAlgorithm, algo);
         self.0.aead_algorithm(algo)
     }
 
     fn packet(&self, packet: &sequoia_openpgp::Packet) -> sequoia_openpgp::Result<()> {
+        if let sequoia_openpgp::Packet::Unknown(_) = packet {
+            anyhow::bail!("Unknown packets are not allowed.")
+        }
         self.0.packet(packet)
     }
 }
