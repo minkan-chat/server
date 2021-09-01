@@ -1,36 +1,40 @@
 use crate::models::graphql::{
+    interfaces::Actor,
     mutations::helpers::{
-        create_session, delete_session, generate_token, get_token_expiry, insert_user,
-        is_refresh_token_denied, parse_cert, parse_signature, set_token_expiry, validate_challenge,
-        validate_username, Claims,
+        create_session, delete_session, generate_token, get_certificate,
+        get_certificate_by_fingerprint, get_token_expiry, insert_user, is_refresh_token_denied,
+        parse_cert, parse_signature, set_token_expiry, validate_challenge, validate_username,
+        Claims,
     },
     types::{
         AuthenticatedUser, AuthenticationError, ExpiredRefreshToken, InvalidCertificate,
         InvalidChallenge, InvalidMasterPasswordHash, InvalidRefreshToken, InvalidSignature,
-        PrivateCertificate, RefreshTokenError, SignupError, TokenPair, UnknownUser, UserSuspended,
+        PrivateCertificate, PublicCertificate, PublishCertificationError, RefreshTokenError,
+        SignupError, TokenPair, UnexpectedSigner, UnknownUser, User, UserSuspended,
     },
 };
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, TokenData, Validation};
 use lazy_static::lazy_static;
 use moka::future::Cache;
 use regex::Regex;
 
 use super::{
+    guards::AuthenticationGuard,
     scalars::Bytes,
     types::{
-        AuthenticationCredentialsUserInput, AuthenticationResult, RefreshTokenResult, SignupResult,
-        SignupUserInput,
+        AuthenticationCredentialsUserInput, AuthenticationResult, Certification,
+        PublishCertificationResult, RefreshTokenResult, SignupResult, SignupUserInput,
     },
 };
 use argon2::{
     password_hash::{PasswordHasher, SaltString},
     Argon2, PasswordHash, PasswordVerifier,
 };
-use async_graphql::{Context, Object, ID};
-use sequoia_openpgp::{packet::Signature, parse::Parse, Cert};
+use async_graphql::{guard::Guard, Context, Object, ID};
+use sequoia_openpgp::{packet::Signature, parse::Parse, Cert, KeyHandle};
 use sqlx::PgPool;
 
-mod helpers {
+pub(crate) mod helpers {
 
     use std::str::FromStr;
 
@@ -53,11 +57,11 @@ mod helpers {
         use sequoia_openpgp::{parse::Parse, serialize::MarshalInto, Cert};
 
         use crate::models::graphql::{
-            mutations::helpers::{parse_cert, parse_signature, validate_challenge},
+            mutations::helpers::{
+                parse_cert, parse_signature, strip_certifications, validate_challenge,
+            },
             scalars::Bytes,
         };
-
-        use super::strip_certifications;
 
         // TODO: get external verified test vectors
 
@@ -280,7 +284,7 @@ mod helpers {
     }
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub(super) struct Claims {
+    pub(crate) struct Claims {
         pub(super) exp: i64,
         pub(super) iat: i64,
         pub(super) nbf: i64,
@@ -292,6 +296,40 @@ mod helpers {
         pub(super) rft: bool,
     }
 
+    pub(crate) async fn get_certificate_by_fingerprint(
+        fingerprint: &str,
+        db: &PgPool,
+    ) -> Option<(Cert, uuid::Uuid)> {
+        match sqlx::query!(
+            r#"
+        SELECT pub_cert, user_id FROM pub_certs WHERE cert_fingerprint = $1
+        "#,
+            fingerprint
+        )
+        .fetch_one(db)
+        .await
+        {
+            Ok(r) => Some((
+                Cert::from_bytes(&r.pub_cert).expect("cert in database not valid"),
+                r.user_id,
+            )),
+            Err(_) => None,
+        }
+    }
+    pub(crate) async fn get_certificate(user_id: uuid::Uuid, db: &PgPool) -> Option<Cert> {
+        match sqlx::query!(
+            r#"
+        SELECT pub_cert FROM pub_certs WHERE user_id = $1
+            "#,
+            user_id,
+        )
+        .fetch_one(db)
+        .await
+        {
+            Ok(r) => Some(Cert::from_bytes(&r.pub_cert).expect("cert in database not valid.")),
+            Err(_) => None,
+        }
+    }
     pub(crate) fn strip_certifications(cert: Cert) -> anyhow::Result<Cert> {
         let fingerprint = cert.fingerprint();
         let packets = cert.into_packets();
@@ -447,6 +485,7 @@ mod helpers {
             })
             .await
     }
+
     /// Returns true of the challenge is valid
     pub(super) fn validate_challenge(
         challenge: &str,
@@ -940,6 +979,161 @@ impl Mutation {
                     },
                 )),
             },
+        }
+        result
+    }
+
+    /// A client may publish a certification of another client's certificate.
+    /// Other clients can then fetch certifications for a client to improve trust.
+    /// The client uploads a ``Signature Packet`` as defined in
+    /// [RFC4880 section 5.2](https://datatracker.ietf.org/doc/html/rfc4880#section-5.2.1).
+    /// The signature type is one of 0x10-0x13.
+    ///
+    /// Note: The signature most be made with a key capable of certification which is the
+    /// primary key only.
+    ///
+    /// The target fingerprint is the fingerprint of the certificate you're certifying as
+    /// defined by [section 12.2](https://datatracker.ietf.org/doc/html/rfc4880#section-12.2).
+    ///
+    /// # Security
+    /// A client needs to be authenticated in order to upload a key. Also, a client is
+    /// only allowed to publish certifications made by itself for other users.
+    ///
+    /// # Example
+    ///
+    /// Alice knows Bob only over the internet. She wants to be sure that Bob is really Bob,
+    /// so they perform a out-of-band key exchange by meeting in real life and showing
+    /// their key fingerprint to each other. If they match, both certify each other's
+    /// certificate.
+    /// An application may implements this with a QR code that can be scanned to simplify
+    /// the process. This uses the web of trust model from openpgp.
+    ///
+    /// Furthermore, Carl is not allowed to upload a certification for Alice made by Bob.
+    #[graphql(guard(AuthenticationGuard()))]
+    async fn publish_certification(
+        &self,
+        ctx: &Context<'_>,
+        target_fingerprint: String,
+        signature: Bytes,
+    ) -> PublishCertificationResult {
+        // won't panic because this resolver is guarded
+        let token = ctx.data_unchecked::<TokenData<Claims>>();
+        let mut result = PublishCertificationResult {
+            certification: None,
+            errors: vec![],
+        };
+
+        let sig = Signature::from_bytes(signature.0.as_ref());
+
+        match sig {
+            Ok(mut sig) => {
+                match sig.get_issuers().len() {
+                    1 => {
+                        let db = ctx.data::<PgPool>().unwrap();
+                        match sig.get_issuers().first().unwrap() {
+                            KeyHandle::Fingerprint(f) => {
+                                let cert = get_certificate(token.claims.sub, db).await.expect(
+                                    "database doesn't have certificate of user with signed jwt",
+                                );
+                                let user_fingerprint = cert.fingerprint();
+                                let target =
+                                    get_certificate_by_fingerprint(&target_fingerprint, db).await;
+                                match target {
+                                    Some((target_cert, target_id)) => match sig
+                                        .verify_userid_binding(
+                                        cert.primary_key().key(),
+                                        target_cert.primary_key().key(),
+                                        &target_cert.userids().last().expect(
+                                            "certificates in database should all have a user id",
+                                        ),
+                                    ) {
+                                        Ok(_) => {
+                                            result.certification = Some(Certification {
+                                                signature,
+                                                signer: Actor::User(User {
+                                                    certificate: PublicCertificate {
+                                                        cert: target_cert,
+                                                    },
+                                                    id: ID(target_id.to_string()),
+                                                    name: "fuck_rewrite_this".to_string(),
+                                                }),
+                                            })
+                                        }
+                                        Err(_) => result.errors.push(
+                                            PublishCertificationError::InvalidSignature(
+                                                InvalidSignature {
+                                                    description: "Signature validation failed."
+                                                        .to_string(),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                    None => result.errors.push(
+                                        PublishCertificationError::InvalidSignature(
+                                            InvalidSignature {
+                                                description: format!(
+                                                    "`{}` is not a known fingerprint.",
+                                                    target_fingerprint
+                                                ),
+                                            },
+                                        ),
+                                    ),
+                                }
+                                match f == &user_fingerprint {
+                                    true => {}
+                                    false => result.errors.push(
+                                        PublishCertificationError::UnexpectedSigner(
+                                            UnexpectedSigner {
+                                                description: format!(
+                                                    concat!(
+                                                "Certifier's fingerprint `{}` didn't match the ",
+                                                "fingerprint `{}` stored for `{}`. ",
+                                                "Note: This means that the certification is ",
+                                                "made by another user's key."
+                                            ),
+                                                    f,
+                                                    &user_fingerprint,
+                                                    token.claims.sub.to_string()
+                                                ),
+                                            },
+                                        ),
+                                    ),
+                                }
+                            }
+                            _ => result
+                                .errors
+                                .push(PublishCertificationError::UnexpectedSigner(
+                                    UnexpectedSigner {
+                                        description: concat!(
+                                            "Failed to identify issuer. ",
+                                            "Note: Only fingerprints (as defined in ",
+                                            "RFC 4880 section 12.2) are accepted."
+                                        )
+                                        .to_string(),
+                                    },
+                                )),
+                        };
+                    }
+                    _ => result
+                        .errors
+                        .push(PublishCertificationError::UnexpectedSigner(
+                            UnexpectedSigner {
+                                description: concat!("Found more than one signer.").to_string(),
+                            },
+                        )),
+                }
+            }
+            Err(_) => result
+                .errors
+                .push(PublishCertificationError::InvalidSignature(
+                    InvalidSignature {
+                        description: concat!(
+                            "Failed to parse signature. ",
+                            "Note: Certification not checked."
+                        )
+                        .to_string(),
+                    },
+                )),
         }
         result
     }

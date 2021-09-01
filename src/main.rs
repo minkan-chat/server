@@ -1,15 +1,19 @@
 use crate::models::graphql::interfaces::{Certificate, Error};
+use crate::models::graphql::mutations::helpers::Claims;
 use crate::models::graphql::{mutations::Mutation, queries::Query, schema::GraphQLSchema};
 use actix_web::body::Body;
 
+use actix_web::http::header::Header;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use actix_web::{post, HttpMessage};
+use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use lazy_static::lazy_static;
 use log::{debug, info};
 use moka::future::{Cache, CacheBuilder};
 use sequoia_openpgp::Cert;
@@ -28,10 +32,26 @@ mod models;
 #[post("/graphql")]
 async fn graphql(
     schema: web::Data<GraphQLSchema>,
+    key: web::Data<DecodingKey>,
     req: Request,
     http_request: HttpRequest,
 ) -> HttpResponse {
-    let response = &schema.execute(req.into_inner()).await;
+    let req = req.into_inner();
+    let req = if let Ok(auth) = Authorization::<Bearer>::parse(&http_request) {
+        lazy_static! {
+            static ref VALIDATION: Validation = Validation::default();
+        }
+        let token = decode::<Claims>(auth.as_ref().token(), &key, &VALIDATION);
+        if let Ok(token) = token {
+            req.data(token)
+        } else {
+            req
+        }
+    } else {
+        req
+    };
+
+    let response = &schema.execute(req).await;
     let content_type = http_request.content_type();
 
     match content_type {
@@ -130,7 +150,7 @@ async fn main() -> std::io::Result<()> {
         .data(token_expiry_cache)
         .data(db)
         .data(jwt_encoding_key)
-        .data(jwt_decoding_key)
+        .data(jwt_decoding_key.clone())
         .finish();
 
     info!("Starting http server on {}", config.host_uri);
@@ -138,6 +158,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data(schema.clone())
+            .data(jwt_decoding_key.clone())
             .service(graphql)
             .route("/graphql/sdl", web::get().to(getsdl))
             .service(
