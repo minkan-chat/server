@@ -153,5 +153,51 @@
         true
       ]
     }
+  },
+  "8fbefe0024bcc303c8b53b7a1d454d2381183b90d72cda07493088af509b3fd7": {
+    "query": "\n        SELECT pub_cert FROM pub_certs WHERE user_id = $1\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "pub_cert",
+          "type_info": "Bytea"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "b7eb13e33a1a9afd755badf05220237d0a4dcd67e6ca5034a4847c58683f3c1e": {
+    "query": "\n        SELECT pub_cert, user_id FROM pub_certs WHERE cert_fingerprint = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "pub_cert",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 1,
+          "name": "user_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
   }
 }
