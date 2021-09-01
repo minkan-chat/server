@@ -7,7 +7,10 @@ use sequoia_openpgp::{
     Cert,
 };
 
-use super::scalars::{Bytes, DateTime};
+use super::{
+    interfaces::Actor,
+    scalars::{Bytes, DateTime},
+};
 
 ////// Types //////
 ///// Output Types /////
@@ -168,7 +171,7 @@ pub(crate) struct InvalidCertificate {
 }
 
 #[derive(SimpleObject, Debug)]
-/// The certification of the server's PGP Certificate is invalid
+/// A signature is invalid
 pub(crate) struct InvalidSignature {
     pub(crate) description: String,
 }
@@ -239,6 +242,32 @@ pub(crate) struct ExpiredRefreshToken {
 pub(crate) struct TokenPair {
     pub(crate) access_token: String,
     pub(crate) refresh_token: String,
+}
+
+/// The server didn't expect this singer for a signature
+#[derive(SimpleObject)]
+pub(crate) struct UnexpectedSigner {
+    pub(crate) description: String,
+}
+
+#[derive(Union)]
+pub(crate) enum PublishCertificationError {
+    InvalidSignature(InvalidSignature),
+    UnexpectedSigner(UnexpectedSigner),
+}
+
+#[derive(SimpleObject)]
+pub(crate) struct PublishCertificationResult {
+    pub(crate) certification: Option<Certification>,
+    pub(crate) errors: Vec<PublishCertificationError>,
+}
+#[derive(SimpleObject)]
+/// Represents a OpenPGP Certification
+pub(crate) struct Certification {
+    /// The Actor who made the certification
+    pub(crate) signer: Actor,
+    /// The certification other clients can verify (the public key of the signer is needed)
+    pub(crate) signature: Bytes,
 }
 
 #[derive(Debug)]

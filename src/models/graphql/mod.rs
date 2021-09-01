@@ -1,3 +1,4 @@
+pub(crate) mod guards;
 pub(crate) mod interfaces;
 pub(crate) mod mutations;
 pub(crate) mod queries;

@@ -5,7 +5,7 @@ use super::{
     types::{
         CertificateTaken, ExpiredRefreshToken, InvalidCertificate, InvalidChallenge,
         InvalidMasterPasswordHash, InvalidRefreshToken, InvalidSignature, InvalidUsername,
-        PrivateCertificate, PublicCertificate, UnknownUser, User, UserSuspended,
+        PrivateCertificate, PublicCertificate, UnexpectedSigner, UnknownUser, User, UserSuspended,
         UsernameUnavailable,
     },
 };
@@ -67,4 +67,5 @@ pub(crate) enum Error {
     InvalidChallenge(InvalidChallenge),
     ExpiredRefreshToken(ExpiredRefreshToken),
     InvalidRefreshToken(InvalidRefreshToken),
+    UnexpectedSigner(UnexpectedSigner),
 }
