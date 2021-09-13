@@ -1,56 +1,50 @@
-use crate::models::graphql::interfaces::{Certificate, Error};
-use crate::models::graphql::mutations::helpers::Claims;
-use crate::models::graphql::{mutations::Mutation, queries::Query, schema::GraphQLSchema};
 use actix_web::body::Body;
 
-use actix_web::http::header::Header;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use actix_web::{post, HttpMessage};
-use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
+
+use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
-use lazy_static::lazy_static;
+
+use graphql::GraphQLSchema;
+use jsonwebtoken::{DecodingKey, EncodingKey};
+
 use log::{debug, info};
 use moka::future::{Cache, CacheBuilder};
+use redis::Client;
 use sequoia_openpgp::Cert;
 use serde::Deserialize;
 use sqlx::{migrate, PgPool};
+
 use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
+
+use crate::graphql::{Mutations, Queries};
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
 
 mod ac;
-mod models;
+mod actors;
+mod auth;
+mod certificate;
+mod fallible;
+mod graphql;
+mod loader;
 
 #[post("/graphql")]
-async fn graphql(
+async fn execute_graphql(
     schema: web::Data<GraphQLSchema>,
-    key: web::Data<DecodingKey>,
+    _key: web::Data<DecodingKey>,
     req: Request,
     http_request: HttpRequest,
 ) -> HttpResponse {
     let req = req.into_inner();
-    let req = if let Ok(auth) = Authorization::<Bearer>::parse(&http_request) {
-        lazy_static! {
-            static ref VALIDATION: Validation = Validation::default();
-        }
-        let token = decode::<Claims>(auth.as_ref().token(), &key, &VALIDATION);
-        if let Ok(token) = token {
-            req.data(token)
-        } else {
-            req
-        }
-    } else {
-        req
-    };
-
     let response = &schema.execute(req).await;
     let content_type = http_request.content_type();
 
@@ -81,6 +75,7 @@ pub struct Config {
     pub(crate) db_uri: String,
     pub(crate) host_uri: String,
     // The unencrypted private certificate of the server armor encoded.
+    #[allow(dead_code)]
     pub(crate) server_cert: ServerCert,
     pub(crate) jwt_secret: String,
 }
@@ -125,6 +120,13 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("couldn't run database migrations");
 
+    let client = redis::Client::open(
+        "redis://redis:htjcm6EFKiTVinh3PWaYUhZMtUQmLAih@s2.erik-tesar.com/".to_string(),
+    )
+    .expect("can't connect to redis server");
+
+    let pool: r2d2::Pool<Client> = r2d2::Pool::builder().build(client).unwrap();
+
     // cache items for one minute (60 seconds)
     let challenge_cache: Cache<String, ()> = CacheBuilder::new(10_000)
         .time_to_live(Duration::from_secs(60))
@@ -141,14 +143,20 @@ async fn main() -> std::io::Result<()> {
         DecodingKey::from_secret(&hex::decode(&config.jwt_secret).expect("Invalid jwt hex secret"));
 
     // build the graphql schema
-    let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
-        .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
-        .register_type::<Certificate>()
+    let schema = GraphQLSchema::build(Queries::default(), Mutations::default(), EmptySubscription)
+        //.register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
+        //.register_type::<Certificate>()
+        .register_type::<actors::Actor>()
+        .register_type::<certificate::Certificate>()
+        .register_type::<graphql::Node>()
         .extension(ApolloTracing)
         .data(config.clone())
+        .data(DataLoader::new(crate::loader::UsernameLoader::new(
+            db.clone(),
+        )))
+        .data(pool)
         .data(challenge_cache)
         .data(token_expiry_cache)
-        .data(db)
         .data(jwt_encoding_key)
         .data(jwt_decoding_key.clone())
         .finish();
@@ -159,7 +167,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .data(schema.clone())
             .data(jwt_decoding_key.clone())
-            .service(graphql)
+            .service(execute_graphql)
             .route("/graphql/sdl", web::get().to(getsdl))
             .service(
                 web::resource(GRAPHQL_PLAYGROUND_ENDPOINT)
