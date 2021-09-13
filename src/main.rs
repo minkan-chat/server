@@ -120,10 +120,8 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("couldn't run database migrations");
 
-    let client = redis::Client::open(
-        "redis://redis:htjcm6EFKiTVinh3PWaYUhZMtUQmLAih@s2.erik-tesar.com/".to_string(),
-    )
-    .expect("can't connect to redis server");
+    let client =
+        redis::Client::open("redis://yeah no".to_string()).expect("can't connect to redis server");
 
     let pool: r2d2::Pool<Client> = r2d2::Pool::builder().build(client).unwrap();
 

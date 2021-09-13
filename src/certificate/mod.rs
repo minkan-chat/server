@@ -172,7 +172,7 @@ macro_rules! strip_cert {
                 let cert = super::strip_cert(self.cert, username)?;
                 Ok(Self {
                     fingerprint: cert.fingerprint(),
-                    cert: cert,
+                    cert,
                 })
             }
         }
@@ -244,7 +244,7 @@ macro_rules! match_key {
 pub fn full_cert_check(cert: &Cert) -> Result<(), Error> {
     // signing, authentication, encryption, certification
     let mut keys = (false, false, false, false);
-    let cert = policy_check(&cert)?;
+    let cert = policy_check(cert)?;
     let signing: KeyFlags = KeyFlags::empty().set_signing();
     let authentication: KeyFlags = KeyFlags::empty().set_authentication();
     let encryption: KeyFlags = KeyFlags::empty()
