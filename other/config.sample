@@ -1,0 +1,9 @@
+db_uri = "postgresql://my_user@my_password@my.host/my_database"
+redis_ui  = "redis://my_other_user@other_password@my.host/"
+listen = "0.0.0.0:8080"
+jwt_secret = ""
+server_cert = """
+-----BEGIN PGP PRIVATE KEY BLOCK-----
+insert my privat key here
+-----END PGP PRIVATE KEY BLOCK-----
+"""
