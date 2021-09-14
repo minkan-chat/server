@@ -33,7 +33,7 @@ impl Config {
         if !config_path.exists() {
             info!("creating config file at {}", config_path.display());
             let mut file = File::create(config_path).expect("cannot create file"); // blocking but we cant use tokio::fs because actix-web 4 is not released
-            file.write_all(include_bytes!("../../other/config.toml.sample")) // include sample config
+            file.write_all(include_bytes!("../../other/config.sample")) // include sample config
                 .expect("cannot write to config file")
         }
 
