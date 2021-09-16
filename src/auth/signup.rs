@@ -31,7 +31,9 @@ pub struct ChallengeProof {
     /// The challenge, the client obtained from the ``challenge`` query.
     /// This will be 32 byte.
     pub challenge: String,
-    /// a signature of the ``challenge`` made with the primary key of the user
+    /// A signature of the ``challenge`` made with the primary key of the user.\
+    /// The signature is made over the bytes decoded from the hex string.
+    /// E.g. the hex string ``13abf3`` would be 0x13abf3 not 0x313361626633
     pub signature: Bytes,
 }
 

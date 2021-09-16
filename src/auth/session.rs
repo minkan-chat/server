@@ -4,6 +4,8 @@ use uuid::Uuid;
 
 use crate::actors::{Actor, User};
 
+use super::token::Claims;
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct Session {
@@ -42,6 +44,20 @@ impl Session {
             session_name,
             user_id,
         })
+    }
+}
+
+impl From<Claims> for Session {
+    /// Constructs a [``Session``] struct from [``Claims``].
+    /// Note that the session_name will always be None,
+    /// even if there's a name stored in the database
+    /// in this case to avoid database I/O
+    fn from(claims: Claims) -> Self {
+        Self {
+            session_id: claims.sid,
+            session_name: None,
+            user_id: claims.sub,
+        }
     }
 }
 

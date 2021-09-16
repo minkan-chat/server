@@ -54,6 +54,27 @@ macro_rules! result_type {
         $err:ty $(,)?
     ) => {
         #[derive(async_graphql::SimpleObject)]
+        /// Result type
+        /// Every result type is built the same way
+        /// it has a field ``ok`` which has some value on success
+        /// and the ``err`` field which is the ``Error`` interface.\
+        /// The rule is: if there's an error, ``ok`` is null, ``err`` is some,
+        /// if there is no error and the operation succeeds, ``err`` is none and
+        /// ``ok`` is some.
+        ///
+        /// # Details
+        ///
+        /// We use this way instead of the ``errors`` field defined by the graphql
+        /// schema, because these errors are not typed. With our way, you know
+        /// exactly which errors could occur and they all implement the ``Error``
+        /// interface so you can always be future proof.
+        ///
+        /// We'd really like to have only a single ``Result`` type, but for that
+        /// we would need a concept like generics. GraphQL, however, does not
+        /// have generics (yet). A union of all possible types on ``ok`` would
+        /// be pretty ugly too.\
+        /// Usually, each query/mutation returning a xResult should specify which
+        /// errors are common / expected to occur.
         pub struct $name {
             pub ok: Option<$ok>,
             pub err: Option<$err>,

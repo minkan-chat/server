@@ -5,18 +5,21 @@
 use crate::{
     certificate::{PrivateCertificate, PublicCertificate},
     fallible::{
-        CertificateTaken, Error, InvalidMasterPasswordHash, InvalidUsername, Unexpected,
+        CertificateTaken, Error, InvalidMasterPasswordHash, InvalidUsername, NoSuchUser,
         UsernameUnavailable,
     },
     graphql::Bytes,
     loader::{PublicCertificateLoader, UsernameLoader},
 };
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use async_graphql::{dataloader::DataLoader, Context, Object};
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use sequoia_openpgp::serialize::SerializeInto;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+use super::AuthenticatedUser;
 
 #[derive(Debug)]
 pub struct User {
@@ -81,11 +84,6 @@ impl User {
         )
         .fetch_one(db)
         .await;
-        
-        let unexpected = Error::Unexpected(Unexpected {
-            description: "unknown database error".to_string(),
-            hint: None,
-        });
 
         match result {
             Ok(record) => Ok(Self { id: record.user_id }),
@@ -123,12 +121,61 @@ impl User {
                             hint: Some("only a-z, 0-9, _ are allowed".to_string()),
                             name: name.to_lowercase(),
                         }),
-                        _ => unexpected,
+                        _ => Error::Unexpected(e.into()),
                     }
                 }
-                _ => unexpected,
+                e => Error::Unexpected(e.into()),
             }),
         }
+    }
+
+    pub async fn authenticate(
+        self,
+        mpw: &Bytes,
+        db: &Pool<Postgres>,
+    ) -> Result<AuthenticatedUser, Error> {
+        lazy_static! {
+            static ref ARGON2: Argon2<'static> = Argon2::default();
+        }
+        let hash = sqlx::query!(
+            r#"
+        SELECT hash FROM users WHERE user_id = $1
+        "#,
+            self.id
+        )
+        .fetch_one(db)
+        .await
+        .expect("user not in database") // safe cuz only Users which are known to be in the database are created
+        .hash;
+
+        let hash = PasswordHash::new(&hash).expect("invalid password hash");
+        ARGON2.verify_password(mpw, &hash).map_err(|e| {
+            Error::InvalidMasterPasswordHash(InvalidMasterPasswordHash {
+                description: "invalid master password hash".to_string(),
+                hint: Some(e.to_string()),
+            })
+        })?;
+
+        Ok(self.into())
+    }
+
+    pub async fn set_token_expiry(
+        &self,
+        time: Option<DateTime<Utc>>,
+        db: &Pool<Postgres>,
+    ) -> DateTime<Utc> {
+        let time = time.unwrap_or_else(Utc::now);
+        sqlx::query!(
+            r#"
+        UPDATE users SET token_expiry = $1 WHERE user_id = $2
+        "#,
+            time,
+            self.id
+        )
+        .execute(db)
+        .await
+        .expect("cannot update token_expiry in database");
+        time
     }
 }
 
@@ -137,6 +184,32 @@ impl From<Uuid> for User {
         Self { id }
     }
 }
+
+impl User {
+    // does database io so it really must be async, but TryFrom can't async, so no trait impl
+    /// Like the [``std::convert::TryFrom``] but with an async fn.
+    /// This function looks up if there's a user with the ``name`` in the database and gets the uuid.
+    /// Errors if there's no such user
+    pub async fn try_from(name: &str, db: &Pool<Postgres>) -> Result<Self, Error> {
+        Ok(sqlx::query!(
+            r#"
+                SELECT user_id FROM users WHERE username = $1"#,
+            name
+        )
+        .fetch_one(db)
+        .await
+        .map_err(|_| {
+            Error::NoSuchUser(NoSuchUser {
+                description: "cannot find a user with that name".to_string(),
+                hint: None,
+                name: name.to_string(),
+            })
+        })?
+        .user_id
+        .into())
+    }
+}
+
 #[Object]
 impl User {
     pub async fn id(&self) -> async_graphql::ID {

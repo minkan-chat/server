@@ -1,13 +1,39 @@
 {
   "db": "PostgreSQL",
-  "097743e7168685ac30be25bd68d7ad1312727972464ce604de2bf479fa915712": {
-    "query": "\n            SELECT token_expiry FROM users WHERE user_id = $1\n            ",
+  "07491a38bbad2958a05a05a8f8980603f9b40b05aa24649951998a5ecad3c71d": {
+    "query": "SELECT user_id AS ka, username AS val FROM users WHERE user_id = ANY($1)",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "token_expiry",
-          "type_info": "Timestamptz"
+          "name": "ka",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "val",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "0a4487b5d05b645bfbb21e4ddd8a5b9ba2335cadcaf378609ddf81749d026926": {
+    "query": "\n        SELECT hash FROM users WHERE user_id = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "hash",
+          "type_info": "Text"
         }
       ],
       "parameters": {
@@ -17,26 +43,6 @@
       },
       "nullable": [
         false
-      ]
-    }
-  },
-  "3157d4355b78f106dbb97b96043eb5e47fc0b4a726e8b170e2bccbed5d537988": {
-    "query": "\n        SELECT exists(SELECT 1 FROM denied_tokens WHERE \"token_id\" = $1)\n        ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "exists",
-          "type_info": "Bool"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        null
       ]
     }
   },
@@ -53,13 +59,85 @@
       "nullable": []
     }
   },
-  "4e89235b8135ec00768d711d0539b0d17f4c7d0f910e7442d58c77e5243dc43f": {
-    "query": "\n            WITH user_result AS (\n                INSERT INTO users ( username, hash, enc_cert ) \n                VALUES ( $1, $2, $3 )\n                RETURNING user_id\n            )\n            INSERT INTO pub_certs ( user_id, cert_fingerprint, pub_cert ) VALUES (\n                ( SELECT user_id from user_result ), $4, $5\n            ) RETURNING (SELECT user_id FROM user_result)\n            ",
+  "584dd1dbeee82e8761075e6d82dc70db1e839379bf0b46ce08b618767a486852": {
+    "query": "\n        SELECT exists(SELECT 1 FROM denied_tokens WHERE token_id = $1) AS \"exists!\"\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "exists!",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        null
+      ]
+    }
+  },
+  "84f5e437456336fcfb55ec391645af004a3a43a147bc6b8c5fdf362762edd924": {
+    "query": "\n                SELECT user_id, pub_cert FROM pub_certs WHERE user_id = ANY($1)\n                ",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
           "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "pub_cert",
+          "type_info": "Bytea"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "a5ac83c707b56c5794b163f9f5b9e7183a70d7eb2d5f1fb18686bccc2448a2b8": {
+    "query": "SELECT user_id AS ka, token_expiry AS val FROM users WHERE user_id = ANY($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "ka",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "val",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "af281589e7f6c50f4efc65866bd2cf253bbc22c42f6fd1db4242b28db1f77cba": {
+    "query": "\n            WITH \"user\" AS (\n                INSERT INTO users (username, hash, enc_cert)\n                VALUES ($1, $2, $3)\n                RETURNING user_id AS id\n            )\n            INSERT INTO pub_certs (user_id, cert_fingerprint, pub_cert)\n            VALUES (\n                (SELECT id FROM \"user\"), $4, $5\n            ) RETURNING (SELECT id FROM \"user\") AS \"user_id!: uuid::Uuid\"\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id!: uuid::Uuid",
           "type_info": "Uuid"
         }
       ],
@@ -77,25 +155,39 @@
       ]
     }
   },
-  "70c3bb186a2e133b97eae3ee11edc42d095202b74560beaf840ae54ffe64fccc": {
-    "query": "\n                DELETE FROM session_info WHERE session_id = $1",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      },
-      "nullable": []
-    }
-  },
-  "73d5efa6d33ffafd10cdb64c75ef4028a65515eca07797b714eb25afc9dbaedc": {
-    "query": "\n        INSERT INTO session_info (\n            user_id,\n            session_name\n        ) VALUES ($1, $2)\n        RETURNING session_id\n        ",
+  "b017d681dc95d9a010006c68e1ec2d2b6c376597a9d8121a59f7af45e1849933": {
+    "query": "\n                SELECT user_id, enc_cert FROM users WHERE user_id = ANY($1)\n                ",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "session_id",
+          "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "enc_cert",
+          "type_info": "Bytea"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "bfa8e5e94e5a262209e382e311114649ea6c8c9aeb319eb6575a08397ab6f6d0": {
+    "query": "\n        INSERT INTO session_info (\n            user_id,\n            session_name\n        ) VALUES ($1, $2)\n        RETURNING session_id AS \"id!: Uuid\"\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id!: Uuid",
           "type_info": "Uuid"
         }
       ],
@@ -110,81 +202,12 @@
       ]
     }
   },
-  "8babdd2f673b17eb2efacd131eb26e24a9cde59f0f0e27715972e1d933a251c6": {
-    "query": "\n                SELECT user_id, hash, enc_cert, suspended, suspended_reason FROM users WHERE username = $1\n                ",
+  "e00a540b6ba76af46de52dbf8746865ef2d22cd7da097e5407291ea7bd17edf2": {
+    "query": "\n                SELECT user_id FROM users WHERE username = $1",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "user_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "hash",
-          "type_info": "Text"
-        },
-        {
-          "ordinal": 2,
-          "name": "enc_cert",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 3,
-          "name": "suspended",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 4,
-          "name": "suspended_reason",
-          "type_info": "Text"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
-  "8fbefe0024bcc303c8b53b7a1d454d2381183b90d72cda07493088af509b3fd7": {
-    "query": "\n        SELECT pub_cert FROM pub_certs WHERE user_id = $1\n            ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "pub_cert",
-          "type_info": "Bytea"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Uuid"
-        ]
-      },
-      "nullable": [
-        false
-      ]
-    }
-  },
-  "b7eb13e33a1a9afd755badf05220237d0a4dcd67e6ca5034a4847c58683f3c1e": {
-    "query": "\n        SELECT pub_cert, user_id FROM pub_certs WHERE cert_fingerprint = $1\n        ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "pub_cert",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 1,
           "name": "user_id",
           "type_info": "Uuid"
         }
@@ -195,7 +218,6 @@
         ]
       },
       "nullable": [
-        false,
         false
       ]
     }

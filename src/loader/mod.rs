@@ -1,6 +1,9 @@
 mod cert_loader;
+mod token_loader;
 mod user_loader;
+
 pub use cert_loader::*;
+pub use token_loader::*;
 pub use user_loader::*;
 
 /// loader_struct macro
@@ -44,7 +47,6 @@ macro_rules! basic_loader {
     ($name:ident, $key:ty, $val:ty, $query:literal) => {
         $crate::loader_struct!($name);
 
-        use futures::stream::TryStreamExt;
         #[async_trait::async_trait]
         impl async_graphql::dataloader::Loader<$key> for $name {
             type Value = $val;
@@ -54,6 +56,7 @@ macro_rules! basic_loader {
                 &self,
                 keys: &[$key],
             ) -> Result<std::collections::HashMap<$key, Self::Value>, Self::Error> {
+                use futures::stream::TryStreamExt;
                 Ok(sqlx::query!($query, keys)
                     .fetch(&self.pool)
                     .map_ok(|record| (record.ka, record.val))

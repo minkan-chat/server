@@ -1,10 +1,21 @@
-use async_graphql::SimpleObject;
-use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use super::Session;
+use crate::{
+    actors::User,
+    fallible::{Error, ExpiredRefreshToken, InvalidRefreshToken, InvalidSignature},
+    loader::TokenExpiryLoader,
+    result_type,
+};
+use async_graphql::{dataloader::DataLoader, SimpleObject};
+use chrono::{DateTime, Duration, Utc};
+use jsonwebtoken::{
+    decode, encode, errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use super::Session;
+result_type!(RefreshTokenResult, TokenPair);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -13,19 +24,19 @@ use super::Session;
 /// Represents the different field in the JWT
 pub struct Claims {
     /// expires at unix timestamp
-    exp: i64,
+    pub exp: i64,
     /// issued at unix timestamp
-    iat: i64,
+    pub iat: i64,
     /// the user this session belongs to
-    sub: Uuid,
+    pub sub: Uuid,
     /// not valid before unix timestamp
-    nbf: i64,
+    pub nbf: i64,
     /// the id of this token (used for deny_list)
-    jti: Uuid,
+    pub jti: Uuid,
     /// the session id
-    sid: Uuid,
+    pub sid: Uuid,
     /// if its a refresh token or not
-    rft: bool,
+    pub rft: bool,
 }
 
 #[derive(SimpleObject)]
@@ -89,5 +100,77 @@ impl TokenPair {
             refresh_token,
             session,
         }
+    }
+
+    pub async fn refresh(
+        token: String,
+        keys: (&EncodingKey, &DecodingKey),
+        db: &Pool<Postgres>,
+        loader: &DataLoader<TokenExpiryLoader>,
+    ) -> Result<Self, Error> {
+        lazy_static! {
+            static ref VALIDATION: Validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+        }
+
+        let token = decode::<Claims>(&token, keys.1, &VALIDATION).map_err(|e| match e.kind() {
+            ErrorKind::InvalidSignature => Error::InvalidSignature(InvalidSignature {
+                description: "jwt has an invalid signature".to_string(),
+                hint: None,
+            }),
+            ErrorKind::ExpiredSignature => Error::ExpiredRefreshToken(ExpiredRefreshToken {
+                description: "refresh token is expired".to_string(),
+                hint: Some(
+                    concat!(
+                        "if you have client-side checks ",
+                        "for expiration to avoid ",
+                        "unnecessary requests, make sure ",
+                        "that your local time is correct"
+                    )
+                    .to_string(),
+                ),
+            }),
+            _ => Error::InvalidRefreshToken(InvalidRefreshToken {
+                description: "not a valid jwt token".to_string(),
+                hint: None,
+            }),
+        })?;
+
+        if !token.claims.rft {
+            return Err(Error::InvalidRefreshToken(InvalidRefreshToken {
+                description: "not a refresh token".to_string(),
+                hint: Some("check the ``rft`` claim".to_string()),
+            }));
+        }
+
+        let token_expiry: DateTime<Utc> = loader.load_one(token.claims.sub).await.unwrap().unwrap();
+
+        if token_expiry.timestamp() > token.claims.iat {
+            return Err(Error::ExpiredRefreshToken(ExpiredRefreshToken {
+                description: "user's token expiry is higher than iat".to_string(),
+                hint: None,
+            }));
+        }
+
+        if sqlx::query!(
+            r#"
+        SELECT exists(SELECT 1 FROM denied_tokens WHERE token_id = $1) AS "exists!"
+        "#,
+            token.claims.jti
+        )
+        .fetch_one(db)
+        .await
+        .map_err(|_| Error::Unexpected("database error getting token expiry".into()))?
+        .exists
+        {
+            User::from(token.claims.sub)
+                .set_token_expiry(None, db)
+                .await;
+            return Err(Error::ExpiredRefreshToken(ExpiredRefreshToken {
+                description: "refresh token is expired".to_string(),
+                hint: None,
+            }));
+        }
+
+        Ok(Self::new(token.claims.into(), keys.0).await)
     }
 }

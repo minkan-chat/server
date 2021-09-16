@@ -20,6 +20,7 @@ A hint for the developer what they could do to prevent this error"
 pub enum Error {
     UsernameUnavailable(UsernameUnavailable),
     InvalidUsername(InvalidUsername),
+    NoSuchUser(NoSuchUser),
     CertificateTaken(CertificateTaken),
     InvalidCertificate(InvalidCertificate),
     InvalidSignature(InvalidSignature),
@@ -63,6 +64,15 @@ error_type! {
     }
 }
 
+error_type! {
+    /// NoSuchUser
+    ///
+    /// The server didn't find a user with that ``name``
+    struct NoSuchUser {
+        /// The name that was searched for
+        name: String,
+    }
+}
 error_type! {
     /// CertificateTaken
     ///
@@ -203,4 +213,13 @@ error_type! {
     ///
     /// An unexpected error. Probably something internal like a offline database
     Unexpected
+}
+
+impl<T: ToString> From<T> for Unexpected {
+    fn from(error: T) -> Self {
+        Self {
+            description: error.to_string(),
+            hint: None,
+        }
+    }
 }
