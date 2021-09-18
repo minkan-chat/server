@@ -1,56 +1,46 @@
-use crate::models::graphql::interfaces::{Certificate, Error};
-use crate::models::graphql::mutations::helpers::Claims;
-use crate::models::graphql::{mutations::Mutation, queries::Query, schema::GraphQLSchema};
 use actix_web::body::Body;
 
-use actix_web::http::header::Header;
 use actix_web::web::Bytes;
 use actix_web::{guard, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use actix_web::{post, HttpMessage};
-use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
+
+use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::EmptySubscription;
 use async_graphql_actix_web::Request;
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
-use lazy_static::lazy_static;
-use log::{debug, info};
+
+use graphql::GraphQLSchema;
+
+use log::info;
 use moka::future::{Cache, CacheBuilder};
-use sequoia_openpgp::Cert;
-use serde::Deserialize;
+use redis::Client;
 use sqlx::{migrate, PgPool};
-use std::fs::read_to_string;
-use std::str::FromStr;
+
 use std::time::Duration;
+
+use crate::config::Config;
+use crate::graphql::{Mutations, Queries};
 
 const GRAPHQL_ENDPOINT: &str = "/graphql";
 const GRAPHQL_PLAYGROUND_ENDPOINT: &str = "/playground";
 
 mod ac;
-mod models;
+mod actors;
+mod auth;
+mod certificate;
+mod config;
+mod fallible;
+mod graphql;
+mod loader;
 
 #[post("/graphql")]
-async fn graphql(
+async fn execute_graphql(
     schema: web::Data<GraphQLSchema>,
-    key: web::Data<DecodingKey>,
     req: Request,
     http_request: HttpRequest,
 ) -> HttpResponse {
     let req = req.into_inner();
-    let req = if let Ok(auth) = Authorization::<Bearer>::parse(&http_request) {
-        lazy_static! {
-            static ref VALIDATION: Validation = Validation::default();
-        }
-        let token = decode::<Claims>(auth.as_ref().token(), &key, &VALIDATION);
-        if let Ok(token) = token {
-            req.data(token)
-        } else {
-            req
-        }
-    } else {
-        req
-    };
-
     let response = &schema.execute(req).await;
     let content_type = http_request.content_type();
 
@@ -76,43 +66,12 @@ async fn playground() -> Result<HttpResponse> {
         ))))
 }
 
-#[derive(Clone, Deserialize, Debug)]
-pub struct Config {
-    pub(crate) db_uri: String,
-    pub(crate) host_uri: String,
-    // The unencrypted private certificate of the server armor encoded.
-    pub(crate) server_cert: ServerCert,
-    pub(crate) jwt_secret: String,
-}
-
-impl Config {
-    fn load(path: &str) -> Self {
-        toml::from_str(&read_to_string(path).expect("Couldn't read file"))
-            .expect("couldn't deserialize config")
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct ServerCert(Cert);
-
-impl<'de> Deserialize<'de> for ServerCert {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let cert = String::deserialize(deserializer)?;
-        Ok(ServerCert(Cert::from_str(&cert).unwrap_or_else(|e| {
-            panic!("Invalid server certificate: {}", e)
-        })))
-    }
-}
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
     // Load config
-    info!("Loading config ...");
-    let config = Config::load("config.toml");
-    debug!("Config: {:#?}", config);
+
+    let config = Config::new();
 
     // Connect to db
     info!("Connecting to the database");
@@ -125,6 +84,11 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("couldn't run database migrations");
 
+    let client =
+        redis::Client::open(config.redis_uri.clone()).expect("can't connect to redis server");
+
+    let pool: r2d2::Pool<Client> = r2d2::Pool::builder().build(client).unwrap();
+
     // cache items for one minute (60 seconds)
     let challenge_cache: Cache<String, ()> = CacheBuilder::new(10_000)
         .time_to_live(Duration::from_secs(60))
@@ -134,32 +98,32 @@ async fn main() -> std::io::Result<()> {
         .time_to_live(Duration::from_secs(120))
         .build();
 
-    let jwt_encoding_key =
-        EncodingKey::from_secret(&hex::decode(&config.jwt_secret).expect("Invalid jwt hex secret"));
-
-    let jwt_decoding_key =
-        DecodingKey::from_secret(&hex::decode(&config.jwt_secret).expect("Invalid jwt hex secret"));
-
     // build the graphql schema
-    let schema = GraphQLSchema::build(Query, Mutation, EmptySubscription)
-        .register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
-        .register_type::<Certificate>()
+    let schema = GraphQLSchema::build(Queries::default(), Mutations::default(), EmptySubscription)
+        //.register_type::<Error>() // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
+        //.register_type::<Certificate>()
+        .register_type::<actors::Actor>()
+        .register_type::<certificate::Certificate>()
+        .register_type::<graphql::Node>()
         .extension(ApolloTracing)
         .data(config.clone())
+        .data(DataLoader::new(crate::loader::UsernameLoader::new(
+            db.clone(),
+        )))
+        .data(pool)
+        .data(config.jwt_secret.0.clone())
+        .data(config.jwt_secret.1.clone())
+        .data(config.server_cert.clone())
         .data(challenge_cache)
         .data(token_expiry_cache)
-        .data(db)
-        .data(jwt_encoding_key)
-        .data(jwt_decoding_key.clone())
         .finish();
 
-    info!("Starting http server on {}", config.host_uri);
+    info!("Starting http server on {}", config.listen);
 
     HttpServer::new(move || {
         App::new()
             .data(schema.clone())
-            .data(jwt_decoding_key.clone())
-            .service(graphql)
+            .service(execute_graphql)
             .route("/graphql/sdl", web::get().to(getsdl))
             .service(
                 web::resource(GRAPHQL_PLAYGROUND_ENDPOINT)
@@ -167,7 +131,7 @@ async fn main() -> std::io::Result<()> {
                     .to(playground),
             )
     })
-    .bind(config.host_uri.clone())?
+    .bind(config.listen)?
     .run()
     .await
 }
