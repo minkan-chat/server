@@ -159,17 +159,28 @@ impl TokenPair {
         )
         .fetch_one(db)
         .await
-        .map_err(|_| Error::Unexpected("database error getting token expiry".into()))?
+        .map_err(|_| Error::Unexpected("database error checking denied tokens".into()))?
         .exists
         {
             User::from(token.claims.sub)
                 .set_token_expiry(None, db)
                 .await;
             return Err(Error::ExpiredRefreshToken(ExpiredRefreshToken {
-                description: "refresh token is expired".to_string(),
+                description: "refresh token is denied".to_string(),
                 hint: None,
             }));
         }
+
+        sqlx::query!(
+            r#"
+            INSERT INTO denied_tokens (token_id)
+            VALUES ($1)
+            "#,
+            token.claims.jti,
+        )
+        .execute(db)
+        .await
+        .map_err(|_| Error::Unexpected("cannot insert into denied tokens".into()))?;
 
         Ok(Self::new(token.claims.into(), keys.0).await)
     }
