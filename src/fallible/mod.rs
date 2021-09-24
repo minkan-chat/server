@@ -116,6 +116,12 @@ macro_rules! result_type {
                 }
             }
         }
+
+        impl From<Result<$ok, $err>> for $name {
+            fn from(val: Result<$ok, $err>) -> Self {
+                Self::from($crate::tri!(val))
+            }
+        }
     };
     (
         $name:ident,
