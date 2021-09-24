@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::TryFrom, sync::Arc};
 
 use crate::{
+    basic_loader,
     certificate::{PrivateCertificate, PublicCertificate},
     loader_struct,
 };
@@ -61,3 +62,10 @@ impl Loader<uuid::Uuid> for PublicCertificateLoader {
         .await?)
     }
 }
+
+basic_loader!(
+    UserIDLoaderByFingerprint,
+    String,
+    uuid::Uuid,
+    "SELECT cert_fingerprint AS ka, user_id AS val FROM pub_certs WHERE cert_fingerprint = ANY($1)"
+);

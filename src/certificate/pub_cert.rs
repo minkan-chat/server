@@ -1,7 +1,7 @@
+use crate::graphql::Bytes;
 use async_graphql::Object;
 use sequoia_openpgp::{serialize::SerializeInto, Cert, Fingerprint};
-
-use crate::graphql::Bytes;
+use std::ops::Deref;
 
 use super::PrivateCertificate;
 
@@ -43,5 +43,12 @@ impl From<PrivateCertificate> for PublicCertificate {
             fingerprint: cert.cert.fingerprint(),
             cert: cert.cert.strip_secret_key_material(),
         }
+    }
+}
+
+impl Deref for PublicCertificate {
+    type Target = Cert;
+    fn deref(&self) -> &Self::Target {
+        &self.cert
     }
 }
