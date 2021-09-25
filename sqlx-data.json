@@ -46,6 +46,26 @@
       ]
     }
   },
+  "3d565f87553d85547f1ff649f50de45423bbda95c39fda9e20d447fc7ef93221": {
+    "query": "\n                    SELECT token_expiry FROM users WHERE user_id = $1\n                    ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "token_expiry",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "44cf6acb2360fc02169a093e2d4bbee7fd463672da2e020911058169a9c4c3c3": {
     "query": "\n        UPDATE users SET token_expiry = $1 WHERE user_id = $2\n        ",
     "describe": {
@@ -76,6 +96,46 @@
       },
       "nullable": [
         null
+      ]
+    }
+  },
+  "682884c66017bae7fa5513aa3a47e9e0efb82fd94212a4274aa638bf8c768bbc": {
+    "query": "\n                    INSERT INTO certifications (\n                        certifier_cert,\n                        target_cert,\n                        certification\n                    ) VALUES ($1, $2, $3)\n                    ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Varchar",
+          "Bytea"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "7b34b4a265fa219b21734d62a31dd7fc1fee111187985aa74a2d7f4e9b55bae4": {
+    "query": "SELECT cert_fingerprint AS ka, user_id AS val FROM pub_certs WHERE cert_fingerprint = ANY($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "ka",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "val",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
       ]
     }
   },
