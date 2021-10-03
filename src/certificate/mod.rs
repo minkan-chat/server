@@ -27,11 +27,11 @@ The fingerprint of the certificate as defined in [RFC4880 section 12.2][1]
 [1]: https://datatracker.ietf.org/doc/html/rfc4880#section-12.2\
 "
     ),
-    field(name = "content", type = "Bytes")
+    field(name = "body", type = "Bytes")
 )]
 /// Certificate
 ///
-/// A OpenPGP certificate
+/// An OpenPGP certificate
 pub enum Certificate {
     PrivateCertificate(PrivateCertificate),
     PublicCertificate(PublicCertificate),

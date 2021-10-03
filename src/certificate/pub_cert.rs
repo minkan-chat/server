@@ -42,7 +42,7 @@ impl PublicCertificate {
         self.fingerprint.to_hex()
     }
 
-    pub async fn content(&self) -> Bytes {
+    pub async fn body(&self) -> Bytes {
         bytes::Bytes::from(self.cert.export_to_vec().expect("failed to serialize cert")).into()
     }
 

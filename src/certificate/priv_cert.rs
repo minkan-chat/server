@@ -49,7 +49,7 @@ impl PrivateCertificate {
         self.fingerprint.to_hex()
     }
 
-    pub async fn content(&self) -> Bytes {
+    pub async fn body(&self) -> Bytes {
         bytes::Bytes::from(
             self.cert
                 .as_tsk() // only TSK exports secret key material

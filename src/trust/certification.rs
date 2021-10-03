@@ -112,7 +112,7 @@ impl Certification {
     }
 
     /// The actual openpgp signature packet
-    async fn content(&self, ctx: &Context<'_>) -> Bytes {
+    async fn body(&self, ctx: &Context<'_>) -> Bytes {
         ctx.data_unchecked::<DataLoader<CertificationLoader>>()
             .load_one(self.clone())
             .await
