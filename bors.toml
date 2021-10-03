@@ -1,6 +1,6 @@
-status = [ "Done"]
+status = ["Done"]
 timeout_sec = 43200 # 12 hours
 required_approvals = 0
 delete_merged_branches = true
 use_codeowners = false
-up_to_date_approvals = true
+up_to_date_approvals = false
