@@ -1,28 +1,25 @@
 use async_graphql::{dataloader::DataLoader, guard::Guard, Context, Object};
 use sequoia_openpgp::{
-    packet::Signature, parse::Parse, serialize::MarshalInto, types::SignatureType, Fingerprint,
+    packet::Signature, parse::Parse, serialize::MarshalInto, types::SignatureType,
 };
 use sqlx::{Pool, Postgres};
 
 use crate::{
-    actors::{Actor, User},
     auth::token::Claims,
     certificate::PublicCertificate,
     fallible::{Error, InvalidSignature, NoSuchUser},
     graphql::Bytes,
-    loader::{PublicCertificateLoader, UserIDLoaderByFingerprint},
+    loader::{CertificationLoader, PublicCertificateLoader, UserIDLoaderByFingerprint},
     result_type,
 };
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Certification {
-    #[sqlx(rename = "certifier_cert")]
-    certifier_fingerprint: Fingerprint,
-    #[sqlx(rename = "target_fingerprint")]
-    target_fingerprint: Fingerprint,
-    certification: Bytes,
+    pub certifier: PublicCertificate,
+    pub target: PublicCertificate,
 }
 
+// TODO: add result type here
 impl Certification {
     // cant use TryFrom cuz async :(
     /// Tries to verify a [``Certification``] and inserts it into the database if valid
@@ -87,11 +84,11 @@ impl Certification {
                 .execute(db)
                 .await
                 .expect("failed to insert certification in database");
-                Ok(Certification {
-                    certification,
+                todo!("#20")
+                /*Ok(Certification {
                     certifier_fingerprint: signer.fingerprint.clone(),
                     target_fingerprint: target.fingerprint.clone(),
-                })
+                })*/
             }
             Err(e) => Err(InvalidSignature {
                 description: "invalid signature".to_string(),
@@ -100,29 +97,27 @@ impl Certification {
             .into()),
         }
     }
-
-    async fn load_actor(ctx: &Context<'_>, k: String) -> Actor {
-        let loader = ctx.data_unchecked::<DataLoader<UserIDLoaderByFingerprint>>();
-        let id = loader.load_one(k).await.unwrap().unwrap();
-        Actor::User(User::from(id))
-    }
 }
+
 #[Object]
 impl Certification {
     /// The creator of the certification
-    async fn certifier(&self, ctx: &Context<'_>) -> Actor {
-        Self::load_actor(ctx, self.certifier_fingerprint.to_hex()).await
+    async fn certifier(&self) -> &PublicCertificate {
+        &self.certifier
     }
 
-    /// The certified ``Actor``
-    async fn target(&self, ctx: &Context<'_>) -> Actor {
-        Self::load_actor(ctx, self.target_fingerprint.to_hex()).await
+    /// The certified ``PublicCertificate``
+    async fn target(&self) -> &PublicCertificate {
+        &self.target
     }
 
     /// The actual openpgp signature packet
-    async fn content(&self) -> Bytes {
-        // this is cheap because the clone of bytes::Bytes is cheap
-        self.certification.clone()
+    async fn content(&self, ctx: &Context<'_>) -> Bytes {
+        ctx.data_unchecked::<DataLoader<CertificationLoader>>()
+            .load_one(self.clone())
+            .await
+            .unwrap()
+            .unwrap()
     }
 }
 
@@ -137,6 +132,19 @@ result_type!(PublishCertificationResult, Certification);
 #[Object]
 impl CertificationMutations {
     #[graphql(guard(crate::guards::AuthenticationGuard()))]
+    /// Publish a certification
+    ///
+    /// A user may upload certifications for other certificates.
+    /// Other users can then query for certifications and don't
+    /// have to trust the server that it's actually the correct
+    /// openpgp identity for a user.\
+    /// ``target`` is the ``fingerprint`` of the user's certificate
+    /// the certification is for.\
+    /// ``certification`` is a single openpgp signature packet
+    /// of one of the certification types (0x10-0x13).
+    /// Note that attestations are not supported. Also, you can
+    /// only upload signatures made by the current authenticated
+    /// user.
     async fn publish_certification(
         &self,
         ctx: &Context<'_>,
