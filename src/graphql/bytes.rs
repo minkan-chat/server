@@ -2,7 +2,7 @@ use async_graphql::scalar;
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[repr(transparent)]
 /// Bytes
 ///

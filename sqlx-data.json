@@ -46,6 +46,61 @@
       ]
     }
   },
+  "359ec8f943ce976a49002a4e67bd394d1021edc08347e48d48af1135ffe3393e": {
+    "query": "\n                    SELECT certifier.pub_cert AS certifier, -- #20\n                    target.pub_cert AS target, -- #20\n                    certifier.user_id AS certifier_id\n                    FROM certifications\n                    INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)\n                    INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)\n                    WHERE target_cert = $1\n                    AND ((certifier.user_id > $2) OR TRUE)\n                    AND ((certifier.user_id < $3) OR TRUE)\n                    ORDER BY certifier.user_id\n                    LIMIT $4\n                    ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "certifier",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 1,
+          "name": "target",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 2,
+          "name": "certifier_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid",
+          "Uuid",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false
+      ]
+    }
+  },
+  "3d565f87553d85547f1ff649f50de45423bbda95c39fda9e20d447fc7ef93221": {
+    "query": "\n                    SELECT token_expiry FROM users WHERE user_id = $1\n                    ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "token_expiry",
+          "type_info": "Timestamptz"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "44cf6acb2360fc02169a093e2d4bbee7fd463672da2e020911058169a9c4c3c3": {
     "query": "\n        UPDATE users SET token_expiry = $1 WHERE user_id = $2\n        ",
     "describe": {
@@ -79,6 +134,46 @@
       ]
     }
   },
+  "682884c66017bae7fa5513aa3a47e9e0efb82fd94212a4274aa638bf8c768bbc": {
+    "query": "\n                    INSERT INTO certifications (\n                        certifier_cert,\n                        target_cert,\n                        certification\n                    ) VALUES ($1, $2, $3)\n                    ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Varchar",
+          "Bytea"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "7b34b4a265fa219b21734d62a31dd7fc1fee111187985aa74a2d7f4e9b55bae4": {
+    "query": "SELECT cert_fingerprint AS ka, user_id AS val FROM pub_certs WHERE cert_fingerprint = ANY($1)",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "ka",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "val",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
   "84f5e437456336fcfb55ec391645af004a3a43a147bc6b8c5fdf362762edd924": {
     "query": "\n                SELECT user_id, pub_cert FROM pub_certs WHERE user_id = ANY($1)\n                ",
     "describe": {
@@ -102,6 +197,35 @@
       "nullable": [
         false,
         false
+      ]
+    }
+  },
+  "9030f6e1279e1ca6dbda318e83191523cbbbb7133582282897fa8e8e61c6c0ec": {
+    "query": "\n                SELECT (\n                    -- if ``after`` is NULL, there won't be any previous page\n                    -- because it starts from the beginning\n                    -- after cursor is $2\n                    -- before cursor is $3\n                    CASE WHEN $2::UUID IS NOT NULL AND $3::UUID IS NULL THEN (\n                        SELECT exists(\n                            SELECT FROM certifications\n                                INNER JOIN pub_certs certifier ON (\n                                    certifications.certifier_cert = certifier.cert_fingerprint\n                                )\n                                WHERE target_cert = $1\n                                AND certifier.user_id < $2 -- $2 is known to be not null here\n                                ORDER BY certifier.user_id\n                                LIMIT 1\n                        )\n                    )\n                    ELSE\n                        (\n                      SELECT exists(\n                      \tSELECT FROM certifications\n                         INNER JOIN pub_certs certifier ON (\n                           \tcertifications.certifier_cert = certifier.cert_fingerprint\n                            )\n                        WHERE target_cert = $1\n                        AND certifier.user_id > $3\n                        ORDER BY certifier.user_id\n                        LIMIT 1\n                      )\n                    )\n                  END\n                ) AS \"has_previous!\",\n                (\n                    SELECT exists(\n                        SELECT FROM certifications\n                            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)\n                            WHERE target_cert = $1\n                                AND ((certifier.user_id > $2) OR TRUE)\n                                AND ((certifier.user_id < $3) OR TRUE)\n                            ORDER BY certifier.user_id\n                            LIMIT 1\n                            OFFSET $4\n                    )\n                ) AS \"has_next!\"\n                ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "has_previous!",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 1,
+          "name": "has_next!",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid",
+          "Uuid",
+          "Int8"
+        ]
+      },
+      "nullable": [
+        null,
+        null
       ]
     }
   },
@@ -176,6 +300,39 @@
         ]
       },
       "nullable": [
+        false,
+        false
+      ]
+    }
+  },
+  "b90f295f796494fa0640bb297b59ef30e6aa34a6c1940705942e0aa2ff4f616f": {
+    "query": "\n            SELECT certifier.pub_cert AS certifier, target.pub_cert AS target, certification FROM certifications -- TODO: only select certificate fingerprints\n            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)      -- when PublicCertificate can be build from \n            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)               -- a certificate fingerprint only (next PR)\n            WHERE target_cert = ANY($1)\n            AND certifier_cert = ANY($2)\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "certifier",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 1,
+          "name": "target",
+          "type_info": "Bytea"
+        },
+        {
+          "ordinal": 2,
+          "name": "certification",
+          "type_info": "Bytea"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray",
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
         false,
         false
       ]
