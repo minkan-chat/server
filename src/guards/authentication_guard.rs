@@ -40,7 +40,7 @@ impl AuthenticationGuard {
         let token = Authorization::<Bearer>::parse(http_request);
         if let Ok(token) = token {
             lazy_static! {
-                static ref VALIDATION: Validation = Validation::default();
+                static ref VALIDATION: Validation = Validation::new(Algorithm::HS256);
             }
             if let Ok(token) = decode::<Claims>(token.as_ref().token(), key, &VALIDATION) {
                 // early return because refresh tokens are not authentication tokens
