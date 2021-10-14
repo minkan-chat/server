@@ -465,8 +465,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "2.9.10"
-source = "git+https://github.com/minkan-chat/async-graphql.git#27c55161498c77c33922ec7e3981c944ad96a914"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fae8d9e26ef1e63d128b6a39da27b86070d6f52a0e31fb9613e084f1ef1242a"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -488,7 +489,6 @@ dependencies = [
  "pin-project-lite 0.2.7",
  "regex",
  "serde",
- "serde_cbor",
  "serde_json",
  "static_assertions",
  "tempfile",
@@ -498,8 +498,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-actix-web"
-version = "2.9.10"
-source = "git+https://github.com/minkan-chat/async-graphql.git#27c55161498c77c33922ec7e3981c944ad96a914"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "076b483cf9c3bdb01889e1bdb79cc68184f3798db090a7f4374b0e3170f3724d"
 dependencies = [
  "actix",
  "actix-http",
@@ -514,8 +515,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "2.9.10"
-source = "git+https://github.com/minkan-chat/async-graphql.git#27c55161498c77c33922ec7e3981c944ad96a914"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01e95362be954a8e16074a56fbebd85b96b2ca239462286c6f3879a4b91fa915"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -529,8 +531,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "2.9.10"
-source = "git+https://github.com/minkan-chat/async-graphql.git#27c55161498c77c33922ec7e3981c944ad96a914"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "265e65ea8b8f5e9083539adb78bccbc63697c06a460b8f978f687d8ed7cf136c"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -541,8 +544,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "2.9.10"
-source = "git+https://github.com/minkan-chat/async-graphql.git#27c55161498c77c33922ec7e3981c944ad96a914"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e1c76e120c4ad75cdf8a0e49b95ddca050b609bda932b3aac94347c43088490"
 dependencies = [
  "bytes 1.1.0",
  "serde",
