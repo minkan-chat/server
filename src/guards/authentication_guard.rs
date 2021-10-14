@@ -2,7 +2,7 @@ use actix_web::{http::header::Header, HttpRequest};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use async_graphql::{guard::Guard, Context, Request};
 use async_trait::async_trait;
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
 use lazy_static::lazy_static;
 use moka::future::Cache;
 use sqlx::{Pool, Postgres};
