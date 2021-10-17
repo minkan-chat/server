@@ -1,5 +1,5 @@
 use crate::actors::Actor;
-use crate::certificate::PublicCertificate;
+use crate::certificate::Certificate;
 use crate::error_type;
 use chrono::{DateTime, Utc};
 
@@ -23,6 +23,8 @@ pub enum Error {
     NoSuchUser(NoSuchUser),
     CertificateTaken(CertificateTaken),
     InvalidCertificate(InvalidCertificate),
+    InvalidCertificateFingerprint(InvalidCertificateFingerprint),
+    UnknownCertificate(UnknownCertificate),
     InvalidSignature(InvalidSignature),
     InvalidMasterPasswordHash(InvalidMasterPasswordHash),
     InvalidChallenge(InvalidChallenge),
@@ -80,10 +82,8 @@ error_type! {
     /// The chance that this will happen by accident is incredible low. It is way more
     /// likely that the client has a bug and sent the same certificate twice.
     struct CertificateTaken {
-        /// The certificate that was sent in the input.\
-        /// Note: If the input certificate contained secret key material,
-        /// this will be stripped. A ``PrivateCertificate`` becomes a ``PublicCertificate``.
-        certificate: Box<PublicCertificate>,
+        /// The certificate that was sent in the input
+        certificate: Box<Certificate>,
     }
 }
 
@@ -94,6 +94,24 @@ error_type!(
     /// The client should check how it encodes the certificate.
     InvalidCertificate
 );
+
+error_type!(
+    /// InvalidCertificateFingerprint
+    ///
+    /// The fingerprint that was sent is invalid. That means, it is not a valid
+    /// hex string.
+    InvalidCertificateFingerprint
+);
+
+error_type! {
+    /// UnknownCertificate
+    ///
+    /// The server does not know a certificate with the ``fingerprint``.
+    struct UnknownCertificate {
+        /// The given fingerprint
+        fingerprint: String,
+    }
+}
 
 error_type!(
     /// InvalidSignature

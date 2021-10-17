@@ -2,7 +2,7 @@ use async_graphql::Interface;
 
 mod authenticated_user;
 mod user;
-use crate::certificate::PublicCertificate;
+use crate::certificate::Certificate;
 pub use authenticated_user::AuthenticatedUser;
 pub use user::User;
 
@@ -11,7 +11,7 @@ pub use user::User;
     field(name = "name", type = "String", desc = "The name of the actor"),
     field(
         name = "certificate",
-        type = "PublicCertificate",
+        type = "Certificate",
         desc = "The OpenPGP certificate of the ``Actor``"
     )
 )]

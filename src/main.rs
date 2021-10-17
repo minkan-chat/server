@@ -108,14 +108,17 @@ async fn main() -> std::io::Result<()> {
     let schema = GraphQLSchema::build(Queries::default(), Mutations::default(), EmptySubscription)
         // https://github.com/async-graphql/async-graphql/issues/595#issuecomment-892321221
         .register_type::<actors::Actor>()
-        .register_type::<certificate::Certificate>()
         .register_type::<graphql::Node>()
         .extension(ApolloTracing)
         .data(config.clone())
         .data(DataLoader::new(UsernameLoader::new(db.clone())))
         .data(DataLoader::new(TokenExpiryLoader::new(db.clone())))
-        .data(DataLoader::new(PrivateCertificateLoader::new(db.clone())))
-        .data(DataLoader::new(PublicCertificateLoader::new(db.clone())))
+        .data(DataLoader::new(PrivateCertificateBodyLoader::new(
+            db.clone(),
+        )))
+        .data(DataLoader::new(PublicCertificateBodyLoader::new(
+            db.clone(),
+        )))
         .data(DataLoader::new(UserIDLoaderByFingerprint::new(db.clone())))
         .data(db.clone())
         .data(pool)

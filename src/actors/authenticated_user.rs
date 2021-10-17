@@ -1,7 +1,7 @@
 use crate::{
     auth::{token::TokenPair, Session},
-    certificate::{PrivateCertificate, PublicCertificate},
-    loader::{PrivateCertificateLoader, PublicCertificateLoader, UsernameLoader},
+    certificate::Certificate,
+    loader::{PrivateCertificateLoader, UsernameLoader},
 };
 use async_graphql::{dataloader::DataLoader, Context, Object};
 use jsonwebtoken::EncodingKey;
@@ -18,7 +18,7 @@ use super::User;
 /// ends up in a recursion, it is possible to generate unlimited sessions for an user.
 ///
 /// Also, if this object is returned, it is possible to obtain the
-/// [``crate::certificate::PrivateCertificate``] of a user.
+/// secret key material of a user.
 ///
 /// **This struct does nothing do validate any credentials**
 pub struct AuthenticatedUser(uuid::Uuid);
@@ -37,17 +37,8 @@ impl AuthenticatedUser {
             .unwrap()
     }
 
-    /// returns the ``PrivateCertificate`` of the ``User``
-    pub async fn private_certificate(&self, ctx: &Context<'_>) -> PrivateCertificate {
+    pub async fn certificate(&self, ctx: &Context<'_>) -> Certificate {
         ctx.data_unchecked::<DataLoader<PrivateCertificateLoader>>()
-            .load_one(self.0)
-            .await
-            .unwrap()
-            .unwrap()
-    }
-
-    pub async fn certificate(&self, ctx: &Context<'_>) -> PublicCertificate {
-        ctx.data_unchecked::<DataLoader<PublicCertificateLoader>>()
             .load_one(self.0)
             .await
             .unwrap()

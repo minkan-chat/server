@@ -3,7 +3,7 @@
 //! This represents a normal user without any specialization
 
 use crate::{
-    certificate::{PrivateCertificate, PublicCertificate},
+    certificate::Certificate,
     fallible::{
         CertificateTaken, Error, InvalidMasterPasswordHash, InvalidUsername, NoSuchUser,
         UsernameUnavailable,
@@ -15,7 +15,7 @@ use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, Pa
 use async_graphql::{dataloader::DataLoader, Context, Object};
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use sequoia_openpgp::serialize::SerializeInto;
+use sequoia_openpgp::{serialize::SerializeInto, Cert};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -31,7 +31,7 @@ impl User {
     /// This function inserts a new user into the database
     pub async fn new(
         name: String,
-        cert: PrivateCertificate,
+        cert: &Cert,
         mpw: Bytes,
         db: &Pool<Postgres>,
     ) -> Result<Self, Error> {
@@ -54,15 +54,13 @@ impl User {
             })?
             .to_string();
 
-        // can't use graphql implementations from ``PrivateCertificate`` :(
-        let fingerprint = cert.cert.fingerprint().to_hex();
+        let fingerprint = cert.fingerprint().to_hex();
         let pub_cert = cert
-            .cert
             .clone()
             .strip_secret_key_material()
             .export_to_vec()
             .unwrap();
-        let cert_raw = cert.cert.as_tsk().export_to_vec().unwrap();
+        let cert_raw = cert.as_tsk().export_to_vec().unwrap();
 
         let result = sqlx::query!(
             r#"
@@ -224,7 +222,7 @@ impl User {
             .unwrap()
     }
 
-    pub async fn certificate(&self, ctx: &Context<'_>) -> PublicCertificate {
+    pub async fn certificate(&self, ctx: &Context<'_>) -> Certificate {
         ctx.data_unchecked::<DataLoader<PublicCertificateLoader>>()
             .load_one(self.id)
             .await

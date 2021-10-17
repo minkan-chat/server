@@ -1,16 +1,18 @@
 use futures::stream::TryStreamExt;
-use sequoia_openpgp::{parse::Parse, Cert};
+use sequoia_openpgp::Fingerprint;
 use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::Loader;
 use async_trait::async_trait;
 
-use crate::{graphql::Bytes, loader_struct, trust::certification::Certification};
+use crate::{
+    certificate::Certificate, graphql::Bytes, loader_struct, trust::certification::Certification,
+};
 
-loader_struct!(CertificationLoader);
+loader_struct!(CertificationBodyLoader);
 
 #[async_trait]
-impl Loader<Certification> for CertificationLoader {
+impl Loader<Certification> for CertificationBodyLoader {
     type Value = Bytes;
     type Error = Arc<sqlx::Error>;
 
@@ -25,16 +27,17 @@ impl Loader<Certification> for CertificationLoader {
             .iter()
             .map(|c| {
                 (
-                    (*c.certifier).fingerprint().to_hex(),
-                    (*c.target).fingerprint().to_hex(),
+                    c.certifier.fingerprint.to_hex(),
+                    c.target.fingerprint.to_hex(),
                 )
             })
             .unzip();
         Ok(sqlx::query!(
             r#"
-            SELECT certifier.pub_cert AS certifier, target.pub_cert AS target, certification FROM certifications -- TODO: only select certificate fingerprints
-            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)      -- when PublicCertificate can be build from 
-            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)               -- a certificate fingerprint only (next PR)
+            SELECT certifier.cert_fingerprint AS certifier, target.cert_fingerprint AS target, certification
+            FROM certifications
+            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)
+            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)
             WHERE target_cert = ANY($1)
             AND certifier_cert = ANY($2)
             "#,
@@ -44,10 +47,9 @@ impl Loader<Certification> for CertificationLoader {
         .fetch(&self.pool)
         .map_ok(|record| {
             (
-                // TODO: see sql statement for TODO
                 Certification {
-                    certifier: Cert::from_bytes(&record.certifier).expect("invalid certificate in database").into(),
-                    target: Cert::from_bytes(&record.target).expect("invalid certificate in database").into(),
+                    certifier: Certificate::from_public(Fingerprint::from_hex(&record.certifier).expect("invalid cert fingerprint in database")),
+                    target: Certificate::from_public(Fingerprint::from_hex(&record.target).expect("invalid cert fingerprint in database")),
                 },
                 bytes::Bytes::from(record.certification).into(),
             )

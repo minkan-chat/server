@@ -46,36 +46,27 @@
       ]
     }
   },
-  "359ec8f943ce976a49002a4e67bd394d1021edc08347e48d48af1135ffe3393e": {
-    "query": "\n                    SELECT certifier.pub_cert AS certifier, -- #20\n                    target.pub_cert AS target, -- #20\n                    certifier.user_id AS certifier_id\n                    FROM certifications\n                    INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)\n                    INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)\n                    WHERE target_cert = $1\n                    AND ((certifier.user_id > $2) OR TRUE)\n                    AND ((certifier.user_id < $3) OR TRUE)\n                    ORDER BY certifier.user_id\n                    LIMIT $4\n                    ",
+  "220b850fd018b20ba9016ef7e16bb568e993264292176f18851d4f792095ba29": {
+    "query": "\n        SELECT pub_cert, cert_fingerprint FROM pub_certs\n        WHERE cert_fingerprint = ANY($1)\n        ",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "certifier",
+          "name": "pub_cert",
           "type_info": "Bytea"
         },
         {
           "ordinal": 1,
-          "name": "target",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 2,
-          "name": "certifier_id",
-          "type_info": "Uuid"
+          "name": "cert_fingerprint",
+          "type_info": "Varchar"
         }
       ],
       "parameters": {
         "Left": [
-          "Text",
-          "Uuid",
-          "Uuid",
-          "Int8"
+          "TextArray"
         ]
       },
       "nullable": [
-        false,
         false,
         false
       ]
@@ -174,58 +165,29 @@
       ]
     }
   },
-  "84f5e437456336fcfb55ec391645af004a3a43a147bc6b8c5fdf362762edd924": {
-    "query": "\n                SELECT user_id, pub_cert FROM pub_certs WHERE user_id = ANY($1)\n                ",
+  "9db505457f0a3c9bd862b34f018aa18edf61a7ba8458144a1ae13ad97877503f": {
+    "query": "\n        SELECT enc_cert, cert_fingerprint FROM users\n        INNER JOIN pub_certs u ON (users.user_id = u.user_id)\n        WHERE u.cert_fingerprint = ANY($1)\n        ",
     "describe": {
       "columns": [
         {
           "ordinal": 0,
-          "name": "user_id",
-          "type_info": "Uuid"
+          "name": "enc_cert",
+          "type_info": "Bytea"
         },
         {
           "ordinal": 1,
-          "name": "pub_cert",
-          "type_info": "Bytea"
+          "name": "cert_fingerprint",
+          "type_info": "Varchar"
         }
       ],
       "parameters": {
         "Left": [
-          "UuidArray"
+          "TextArray"
         ]
       },
       "nullable": [
         false,
         false
-      ]
-    }
-  },
-  "9030f6e1279e1ca6dbda318e83191523cbbbb7133582282897fa8e8e61c6c0ec": {
-    "query": "\n                SELECT (\n                    -- if ``after`` is NULL, there won't be any previous page\n                    -- because it starts from the beginning\n                    -- after cursor is $2\n                    -- before cursor is $3\n                    CASE WHEN $2::UUID IS NOT NULL AND $3::UUID IS NULL THEN (\n                        SELECT exists(\n                            SELECT FROM certifications\n                                INNER JOIN pub_certs certifier ON (\n                                    certifications.certifier_cert = certifier.cert_fingerprint\n                                )\n                                WHERE target_cert = $1\n                                AND certifier.user_id < $2 -- $2 is known to be not null here\n                                ORDER BY certifier.user_id\n                                LIMIT 1\n                        )\n                    )\n                    ELSE\n                        (\n                      SELECT exists(\n                      \tSELECT FROM certifications\n                         INNER JOIN pub_certs certifier ON (\n                           \tcertifications.certifier_cert = certifier.cert_fingerprint\n                            )\n                        WHERE target_cert = $1\n                        AND certifier.user_id > $3\n                        ORDER BY certifier.user_id\n                        LIMIT 1\n                      )\n                    )\n                  END\n                ) AS \"has_previous!\",\n                (\n                    SELECT exists(\n                        SELECT FROM certifications\n                            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)\n                            WHERE target_cert = $1\n                                AND ((certifier.user_id > $2) OR TRUE)\n                                AND ((certifier.user_id < $3) OR TRUE)\n                            ORDER BY certifier.user_id\n                            LIMIT 1\n                            OFFSET $4\n                    )\n                ) AS \"has_next!\"\n                ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "has_previous!",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 1,
-          "name": "has_next!",
-          "type_info": "Bool"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Uuid",
-          "Uuid",
-          "Int8"
-        ]
-      },
-      "nullable": [
-        null,
-        null
       ]
     }
   },
@@ -279,65 +241,6 @@
       ]
     }
   },
-  "b017d681dc95d9a010006c68e1ec2d2b6c376597a9d8121a59f7af45e1849933": {
-    "query": "\n                SELECT user_id, enc_cert FROM users WHERE user_id = ANY($1)\n                ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "user_id",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 1,
-          "name": "enc_cert",
-          "type_info": "Bytea"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "UuidArray"
-        ]
-      },
-      "nullable": [
-        false,
-        false
-      ]
-    }
-  },
-  "b90f295f796494fa0640bb297b59ef30e6aa34a6c1940705942e0aa2ff4f616f": {
-    "query": "\n            SELECT certifier.pub_cert AS certifier, target.pub_cert AS target, certification FROM certifications -- TODO: only select certificate fingerprints\n            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)      -- when PublicCertificate can be build from \n            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)               -- a certificate fingerprint only (next PR)\n            WHERE target_cert = ANY($1)\n            AND certifier_cert = ANY($2)\n            ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "certifier",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 1,
-          "name": "target",
-          "type_info": "Bytea"
-        },
-        {
-          "ordinal": 2,
-          "name": "certification",
-          "type_info": "Bytea"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "TextArray",
-          "TextArray"
-        ]
-      },
-      "nullable": [
-        false,
-        false,
-        false
-      ]
-    }
-  },
   "bfa8e5e94e5a262209e382e311114649ea6c8c9aeb319eb6575a08397ab6f6d0": {
     "query": "\n        INSERT INTO session_info (\n            user_id,\n            session_name\n        ) VALUES ($1, $2)\n        RETURNING session_id AS \"id!: Uuid\"\n        ",
     "describe": {
@@ -371,6 +274,39 @@
       "nullable": []
     }
   },
+  "d895d554599441bb99990c8d6fb0b3813c48eb2cef76c47121b5aa0ef6f4128b": {
+    "query": "\n            SELECT certifier.cert_fingerprint AS certifier, target.cert_fingerprint AS target, certification\n            FROM certifications\n            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)\n            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)\n            WHERE target_cert = ANY($1)\n            AND certifier_cert = ANY($2)\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "certifier",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "target",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 2,
+          "name": "certification",
+          "type_info": "Bytea"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray",
+          "TextArray"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false
+      ]
+    }
+  },
   "e00a540b6ba76af46de52dbf8746865ef2d22cd7da097e5407291ea7bd17edf2": {
     "query": "\n                SELECT user_id FROM users WHERE username = $1",
     "describe": {
@@ -387,6 +323,32 @@
         ]
       },
       "nullable": [
+        false
+      ]
+    }
+  },
+  "fe505afc697f6c731be048cdf0a317b742279b950be55979ee43a4577ea48e03": {
+    "query": "\n            SELECT user_id, cert_fingerprint FROM pub_certs WHERE user_id = ANY($1)\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "cert_fingerprint",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "UuidArray"
+        ]
+      },
+      "nullable": [
+        false,
         false
       ]
     }
