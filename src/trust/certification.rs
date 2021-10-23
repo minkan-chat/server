@@ -1,22 +1,23 @@
 use async_graphql::{dataloader::DataLoader, guard::Guard, Context, Object};
 use sequoia_openpgp::{
-    packet::Signature, parse::Parse, serialize::MarshalInto, types::SignatureType,
+    packet::Signature, parse::Parse, serialize::MarshalInto, types::SignatureType, Cert,
+    Fingerprint,
 };
-use sqlx::{Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 
 use crate::{
     auth::token::Claims,
-    certificate::PublicCertificate,
-    fallible::{Error, InvalidSignature, NoSuchUser},
+    certificate::Certificate,
+    fallible::{Error, InvalidCertificateFingerprint, InvalidSignature, UnknownCertificate},
     graphql::Bytes,
-    loader::{CertificationLoader, PublicCertificateLoader, UserIDLoaderByFingerprint},
-    result_type,
+    loader::{CertificationBodyLoader, PublicCertificateBodyLoader, PublicCertificateLoader},
+    result_type, tri,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Certification {
-    pub certifier: PublicCertificate,
-    pub target: PublicCertificate,
+    pub certifier: Certificate,
+    pub target: Certificate,
 }
 
 // TODO: add result type here
@@ -24,8 +25,8 @@ impl Certification {
     // cant use TryFrom cuz async :(
     /// Tries to verify a [``Certification``] and inserts it into the database if valid
     async fn try_from(
-        signer: &PublicCertificate,
-        target: &PublicCertificate,
+        signer: &Cert,
+        target: &Cert,
         certification: Bytes,
         db: &Pool<Postgres>,
     ) -> Result<Self, Error> {
@@ -34,6 +35,7 @@ impl Certification {
 
         // there are 4 types for certifications in openpgp
         // implementations don't differ and so don't we
+        // NOTE: this check is actually not needed because ``verify_user_id_binding`` does exactly that too.
         if !matches!(
             signature.typ(),
             SignatureType::GenericCertification
@@ -77,18 +79,17 @@ impl Certification {
                         certification
                     ) VALUES ($1, $2, $3)
                     "#,
-                    signer.fingerprint.to_string(),
-                    target.fingerprint.to_string(),
+                    signer.fingerprint().to_hex(),
+                    target.fingerprint().to_hex(),
                     signature.export_to_vec().unwrap(),
                 )
                 .execute(db)
                 .await
                 .expect("failed to insert certification in database");
-                todo!("#20")
-                /*Ok(Certification {
-                    certifier_fingerprint: signer.fingerprint.clone(),
-                    target_fingerprint: target.fingerprint.clone(),
-                })*/
+                Ok(Certification {
+                    certifier: signer.into(),
+                    target: target.into(),
+                })
             }
             Err(e) => Err(InvalidSignature {
                 description: "invalid signature".to_string(),
@@ -102,18 +103,18 @@ impl Certification {
 #[Object]
 impl Certification {
     /// The creator of the certification
-    async fn certifier(&self) -> &PublicCertificate {
+    async fn certifier(&self) -> &Certificate {
         &self.certifier
     }
 
     /// The certified ``PublicCertificate``
-    async fn target(&self) -> &PublicCertificate {
+    async fn target(&self) -> &Certificate {
         &self.target
     }
 
     /// The actual openpgp signature packet
-    async fn content(&self, ctx: &Context<'_>) -> Bytes {
-        ctx.data_unchecked::<DataLoader<CertificationLoader>>()
+    async fn body(&self, ctx: &Context<'_>) -> Bytes {
+        ctx.data_unchecked::<DataLoader<CertificationBodyLoader>>()
             .load_one(self.clone())
             .await
             .unwrap()
@@ -153,39 +154,49 @@ impl CertificationMutations {
     ) -> PublishCertificationResult {
         // won't panic, because it is guarded by the AuthenticationGuard
         let claims = ctx.data_unchecked::<Claims>();
+        let target = target.to_uppercase();
 
-        // try to load the user from the database
-        if let Some(target_id) = ctx
-            .data_unchecked::<DataLoader<UserIDLoaderByFingerprint>>()
-            .load_one(target.clone())
+        let t_figerprint = tri!(Fingerprint::from_hex(&target).map_err(|_| Error::from(
+            InvalidCertificateFingerprint::new("cannot parse fingerprint".to_string())
+        )));
+
+        let t_cert = Certificate::from_public(t_figerprint);
+        let cert_loader = ctx.data_unchecked::<DataLoader<PublicCertificateBodyLoader>>();
+
+        // the cert body of the target
+        let t_cert = tri!(cert_loader
+            .load_one(t_cert)
             .await
             .unwrap()
-        {
-            let cert_loader = ctx.data_unchecked::<DataLoader<PublicCertificateLoader>>();
-
-            // load both certificates of the target and the signer from the database
-            let certs = cert_loader
-                .load_many([claims.sub, target_id])
-                .await
-                .unwrap();
-
-            let target = certs.get(&target_id).unwrap();
-            let signer = certs.get(&claims.sub).unwrap();
-
-            Certification::try_from(
-                signer,
+            .ok_or_else(|| Error::from(UnknownCertificate::new(
+                "cannot find a certificate with that fingerprint".to_string(),
                 target,
+            ))));
+
+        let c_cert = ctx
+            .data_unchecked::<DataLoader<PublicCertificateLoader>>()
+            .load_one(claims.sub)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // the cert body of the certifier
+        let c_cert = cert_loader.load_one(c_cert).await.unwrap().unwrap();
+
+        let target =
+            Cert::from_bytes(&t_cert.into_inner()).expect("invalid certificate in database");
+        let signer =
+            Cert::from_bytes(&c_cert.into_inner()).expect("invalid certificate in database");
+
+        tri!(
+            Certification::try_from(
+                &signer,
+                &target,
                 certification,
-                ctx.data_unchecked::<Pool<Postgres>>(),
+                ctx.data_unchecked::<PgPool>(),
             )
             .await
-            .into()
-        } else {
-            Error::NoSuchUser(NoSuchUser::new(
-                "found no user with a cert that matched the fingerprint".to_string(),
-                target,
-            ))
-            .into()
-        }
+        )
+        .into()
     }
 }

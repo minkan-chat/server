@@ -1,11 +1,9 @@
 //! Auth*entication*
 //!
 //! This part deals with authentication. It determines an user's identity
-use std::convert::TryFrom;
-
 use crate::{
     actors::{AuthenticatedUser, User},
-    certificate::{PrivateCertificate, PublicCertificate},
+    certificate::Certificate,
     fallible::*,
     graphql::Bytes,
     loader::TokenExpiryLoader,
@@ -20,7 +18,7 @@ use async_graphql::{dataloader::DataLoader, Context, Object, Result};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use rand::Rng;
 use redis::{Client, Commands};
-use sqlx::{Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 
 #[derive(Default)]
 pub struct AuthenticationQuery;
@@ -75,16 +73,25 @@ impl AuthenticationMutation {
         }
 
         // check if we can parse the certificate and it complies with our policy
-        let cert = tri!(PrivateCertificate::try_from(user.certificate.into_inner()));
+        let cert = tri!(Certificate::check(&user.certificate.into_inner()));
 
-        let db = ctx.data_unchecked::<Pool<Postgres>>();
+        // early return if the certificate has no secret parts
+        if !cert.is_tsk() {
+            return Error::from(InvalidCertificate::new(
+                "certificate has no secret parts".to_string(),
+            ))
+            .into();
+        }
 
-        let pub_cert: PublicCertificate = cert.clone().into();
         // verify the challenge
-        tri!(proof.verify(pub_cert).await);
+        tri!(proof.verify(&cert).await);
 
-        let user: AuthenticatedUser = tri!(User::new(user.name, cert, user.hash, db).await).into(); // User into AuthenticatedUser
-        user.into() // transform the AuthenticatedUser into SignupResult<Some(user), None> (result impl from $ok)
+        // User into AuthenticatedUser
+        let user: AuthenticatedUser =
+            tri!(User::new(user.name, &cert, user.hash, ctx.data_unchecked::<PgPool>()).await)
+                .into();
+        // transform the AuthenticatedUser into SignupResult<Some(user), None> (result impl from $ok)
+        user.into()
     }
 
     /// Authenticate

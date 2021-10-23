@@ -2,13 +2,14 @@
 //!
 //! This module keeps models related to the ``signup`` mutation.
 
-use crate::certificate::PublicCertificate;
+
 use crate::fallible::{Error, InvalidChallenge, InvalidSignature};
 use crate::graphql::Bytes;
 use crate::result_type;
 use async_graphql::InputObject;
 use sequoia_openpgp::packet::Signature;
 use sequoia_openpgp::parse::Parse;
+use sequoia_openpgp::Cert;
 
 result_type!(SignupResult, crate::actors::AuthenticatedUser);
 
@@ -41,7 +42,7 @@ impl ChallengeProof {
     /// verifies that the challenge's signature is made by the ``signer``
     // TODO: prio: add test for this
     // TODO: mid-prio: benchmark to see if it's blocking too long
-    pub async fn verify(&self, signer: PublicCertificate) -> Result<(), Error> {
+    pub async fn verify(&self, signer: &Cert) -> Result<(), Error> {
         let mut signature = Signature::from_bytes(&self.signature.as_ref()).map_err(|_| {
             Error::InvalidSignature(InvalidSignature {
                 description: "failed to parse signature".to_string(),
@@ -58,7 +59,7 @@ impl ChallengeProof {
         })?;
 
         signature
-            .verify_message(signer.cert.primary_key().key(), &challenge)
+            .verify_message(signer.primary_key().key(), &challenge)
             .map_err(|e| {
                 Error::InvalidChallenge(InvalidChallenge {
                     challenge: self.challenge.clone(),
