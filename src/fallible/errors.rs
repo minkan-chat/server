@@ -1,5 +1,6 @@
 use crate::actors::Actor;
 use crate::certificate::Certificate;
+use crate::graphql::Bytes;
 use crate::error_type;
 use chrono::{DateTime, Utc};
 
@@ -176,7 +177,7 @@ error_type! {
     /// another ``InvalidSignature`` error could be attached.
     struct InvalidChallenge {
         /// The challenge provided in the input object
-        challenge: String,
+        challenge: Bytes,
     }
 }
 error_type!(

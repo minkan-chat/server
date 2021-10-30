@@ -47,12 +47,12 @@ impl AuthenticationMutation {
         let mut con = pool.get().unwrap();
 
         // 32 bytes in hex = 64 chars
-        if proof.challenge.len() != 64 {
+        if proof.challenge.len() != 32 {
             return Error::InvalidChallenge(InvalidChallenge {
                 challenge: proof.challenge,
                 description: "challenge length is invalid".to_string(),
                 hint: Some(
-                    "a challenge is a 32 byte hex string in lowercase (64 chars 0-9a-f)"
+                    "a challenge is a 32 byte array"
                         .to_string(),
                 ),
             })
@@ -61,7 +61,7 @@ impl AuthenticationMutation {
         // workaround because ``GETDEL`` is not supported (yet)
         // if the key (the challenge) is in the redis db,
         // it will return that 1 key got deleted
-        let count: u8 = con.del(&proof.challenge.to_lowercase()).unwrap(); // this is blocking and therefore bad
+        let count: u8 = con.del(proof.challenge.to_vec()).unwrap(); // this is blocking and therefore bad
         if count != 1 {
             return Error::InvalidChallenge(InvalidChallenge {
                 challenge: proof.challenge,
