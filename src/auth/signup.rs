@@ -2,7 +2,6 @@
 //!
 //! This module keeps models related to the ``signup`` mutation.
 
-
 use crate::fallible::{Error, InvalidChallenge, InvalidSignature};
 use crate::graphql::Bytes;
 use crate::result_type;
