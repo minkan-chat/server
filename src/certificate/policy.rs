@@ -1,7 +1,8 @@
 use sequoia_openpgp::{
     crypto::mpi::PublicKey,
     policy::{Policy, StandardPolicy},
-    types::{Curve}, Packet,
+    types::Curve,
+    Packet,
 };
 
 #[derive(Debug)]
