@@ -166,7 +166,7 @@ impl AuthenticationQuery {
         let mut con = pool.get().unwrap();
         // encode the challenge to a hex string
         // save it in the redis database for 120 seconds
-        let _: () = con.set_ex(hex::encode(challenge), true, 120)?;
+        let _: () = con.set_ex(challenge.to_vec(), true, 120)?;
 
         Ok(bytes::Bytes::from(challenge.to_vec()).into())
     }
