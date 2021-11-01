@@ -6,9 +6,9 @@ use sequoia_openpgp::{
 };
 
 #[derive(Debug)]
-pub struct SignalCompliantPolcy<'a>(StandardPolicy<'a>);
+pub struct CompliantPolicy<'a>(StandardPolicy<'a>);
 
-impl SignalCompliantPolcy<'static> {
+impl CompliantPolicy<'static> {
     pub const fn new() -> Self {
         Self(StandardPolicy::new())
     }
@@ -25,7 +25,7 @@ macro_rules! disallow_unknown_and_private_variants {
     };
 }
 
-impl<'a> Policy for SignalCompliantPolcy<'a> {
+impl<'a> Policy for CompliantPolicy<'a> {
     fn key(
         &self,
         ka: &sequoia_openpgp::cert::prelude::ValidErasedKeyAmalgamation<

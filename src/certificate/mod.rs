@@ -54,8 +54,10 @@ impl From<&Cert> for Certificate {
 }
 
 impl Certificate {
+    /// Checks if the provided [`bytes::Bytes`] are a valid openpgp certificate
+    /// and if it passes our custom [`CompliantPolicy`]
     pub fn check(value: &bytes::Bytes) -> Result<Cert, Error> {
-        static POLICY: SignalCompliantPolcy = SignalCompliantPolcy::new();
+        static POLICY: CompliantPolicy = CompliantPolicy::new();
         let cert = Cert::from_bytes(value).map_err(|_| {
             Error::from(InvalidCertificate::new(
                 "cannot parse certificate".to_string(),
