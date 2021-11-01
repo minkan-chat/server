@@ -54,8 +54,10 @@ impl From<&Cert> for Certificate {
 }
 
 impl Certificate {
+    /// Checks if the provided [`bytes::Bytes`] are a valid openpgp certificate
+    /// and if it passes our custom [`CompliantPolicy`]
     pub fn check(value: &bytes::Bytes) -> Result<Cert, Error> {
-        static POLICY: SignalCompliantPolcy = SignalCompliantPolcy::new();
+        static POLICY: CompliantPolicy = CompliantPolicy::new();
         let cert = Cert::from_bytes(value).map_err(|_| {
             Error::from(InvalidCertificate::new(
                 "cannot parse certificate".to_string(),
@@ -90,12 +92,30 @@ impl Certificate {
             .into());
         }
 
-        if v_cert.keys().key_flags(encryption).count() != 1 {
+        // keys with `transport` or `storage` encryption key flag
+        let mut enc_keys = v_cert.keys().key_flags(encryption);
+
+        if let Some(key) = enc_keys.next() {
+            if enc_keys.next().is_some() {
+                return Err(InvalidCertificate {
+                    description: "found more than one encryption key".to_string(),
+                    hint: None,
+                }
+                .into());
+            }
+
+            // we only accept keys that are both for transport and storage encryption
+            if !(key.for_transport_encryption() && key.for_storage_encryption()) {
+                return Err(InvalidCertificate {
+                    description: "key not for both transport and storage encryption".to_string(),
+                    hint: None,
+                }
+                .into());
+            }
+        } else {
             return Err(InvalidCertificate {
-                description: "no or more than one key for encryption".to_string(),
-                hint: Some(
-                    "be sure to set both transport and storage encryption as keyflags".to_string(),
-                ),
+                description: "found no key for encryption".to_string(),
+                hint: None,
             }
             .into());
         }
