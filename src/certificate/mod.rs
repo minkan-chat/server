@@ -144,3 +144,40 @@ impl Certificate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::certificate::Certificate;
+    #[test]
+    fn missing_key_check() {
+        // is missing an encryption key
+        let s_c_a = include_bytes!("../../other/tests/missing_key/s_c_a.pgp")[..].into();
+        Certificate::check(&s_c_a).expect_err("cert is missing encryption keys");
+
+        // is missing authentication key
+        let s_c_e = include_bytes!("../../other/tests/missing_key/s_c_e.pgp")[..].into();
+        Certificate::check(&s_c_e).expect_err("cert is missing authentication key");
+
+        // is missing signing key
+        let c_a_e = include_bytes!("../../other/tests/missing_key/c_a_e.pgp")[..].into();
+        Certificate::check(&c_a_e).expect_err("cert is missing signing key");
+
+        // has only a key for storage encryption but not one for transport encryption
+        let s_c_a_es = include_bytes!("../../other/tests/missing_key/s_c_a_es.pgp")[..].into();
+        Certificate::check(&s_c_a_es).expect_err("cert is missing transport encryption key");
+
+        // has two keys one with storage encryption, one with transport encryption
+        let s_c_a_et_es =
+            include_bytes!("../../other/tests/missing_key/s_c_a_et_es.pgp")[..].into();
+        Certificate::check(&s_c_a_et_es)
+            .expect_err("cert has two encryption keys for transport and storage encryption");
+
+        // this cert is valid but has two encryption keys
+        let s_c_a_e_e = include_bytes!("../../other/tests/missing_key/s_c_a_e_e.pgp")[..].into();
+        Certificate::check(&s_c_a_e_e).expect_err("cert has two encryption keys");
+
+        // this is a valid cert
+        let valid = include_bytes!("../../other/tests/missing_key/valid.pgp")[..].into();
+        Certificate::check(&valid).expect("cert is valid");
+    }
+}
