@@ -148,6 +148,7 @@ impl Certificate {
 #[cfg(test)]
 mod tests {
     use crate::certificate::Certificate;
+
     #[test]
     fn missing_key_check() {
         // is missing an encryption key
@@ -179,5 +180,36 @@ mod tests {
         // this is a valid cert
         let valid = include_bytes!("../../other/tests/missing_key/valid.pgp")[..].into();
         Certificate::check(&valid).expect("cert is valid");
+    }
+
+    #[test]
+    fn invalid_ciphersuite() {
+        // cert uses keys with nist p-521
+        let nist_p_521 = include_bytes!("../../other/tests/policy/nist_p_521.pgp")[..].into();
+        Certificate::check(&nist_p_521).expect_err("cert uses nist p-521");
+
+        // cert has a subkey with nist p-384
+        let subkey_nist_p_384 =
+            include_bytes!("../../other/tests/policy/subkey_nist_p_384.pgp")[..].into();
+        Certificate::check(&subkey_nist_p_384).expect_err("subkey uses nist p-521");
+
+        // cert uses rsa
+        let rsa_key = include_bytes!("../../other/tests/policy/rsa_4096.pgp")[..].into();
+        Certificate::check(&rsa_key).expect_err("cert uses rsa with 4096 key size");
+    }
+
+    #[test]
+    fn unencrypted_secret() {
+        // the whole certificate is unencrypted
+        let unencrypted = include_bytes!("../../other/tests/policy/unencrypted.pgp")[..].into();
+        Certificate::check(&unencrypted).expect_err("cert has unencrypted secrets");
+    }
+
+    #[test]
+    fn expiration_date() {
+        // cert has an expiration date
+        let expiration_date =
+            include_bytes!("../../other/tests/policy/expiration_date.pgp")[..].into();
+        Certificate::check(&expiration_date).expect_err("cert has an expiration date");
     }
 }
