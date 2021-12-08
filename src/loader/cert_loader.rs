@@ -16,7 +16,7 @@ impl Loader<Uuid> for PublicCertificateLoader {
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
         Ok(sqlx::query!(
             r#"
-            SELECT user_id, cert_fingerprint FROM pub_certs WHERE user_id = ANY($1)
+            SELECT user_id, fingerprint FROM certificates WHERE user_id = ANY($1)
             "#,
             keys,
         )
@@ -25,7 +25,7 @@ impl Loader<Uuid> for PublicCertificateLoader {
             (
                 record.user_id,
                 Certificate::from_public(
-                    Fingerprint::from_hex(&record.cert_fingerprint)
+                    Fingerprint::from_hex(&record.fingerprint)
                         .expect("invalid certificate fingerprint in database"),
                 ),
             )
@@ -44,7 +44,7 @@ impl Loader<Uuid> for PrivateCertificateLoader {
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
         Ok(sqlx::query!(
             r#"
-            SELECT user_id, cert_fingerprint FROM pub_certs WHERE user_id = ANY($1)
+            SELECT user_id, fingerprint FROM certificates WHERE user_id = ANY($1)
             "#,
             keys,
         )
@@ -53,7 +53,7 @@ impl Loader<Uuid> for PrivateCertificateLoader {
             (
                 record.user_id,
                 Certificate::from_private(
-                    Fingerprint::from_hex(&record.cert_fingerprint)
+                    Fingerprint::from_hex(&record.fingerprint)
                         .expect("invalid certificate fingerprint in database"),
                 ),
             )
@@ -67,7 +67,7 @@ basic_loader!(
     UserIDLoaderByFingerprint,
     String,
     uuid::Uuid,
-    "SELECT cert_fingerprint AS ka, user_id AS val FROM pub_certs WHERE cert_fingerprint = ANY($1)"
+    "SELECT fingerprint AS ka, user_id AS val FROM certificates WHERE fingerprint = ANY($1)"
 );
 
 loader_struct!(PrivateCertificateBodyLoader);
@@ -83,9 +83,8 @@ impl Loader<Certificate> for PrivateCertificateBodyLoader {
         let fingerprints: Vec<_> = keys.iter().map(|c| c.fingerprint.to_hex()).collect();
         Ok(sqlx::query!(
             r#"
-        SELECT enc_cert, cert_fingerprint FROM users
-        INNER JOIN pub_certs u ON (users.user_id = u.user_id)
-        WHERE u.cert_fingerprint = ANY($1)
+        SELECT body, fingerprint FROM certificates
+        WHERE fingerprint = ANY($1)
         "#,
             &fingerprints
         )
@@ -93,11 +92,11 @@ impl Loader<Certificate> for PrivateCertificateBodyLoader {
         .map_ok(|record| {
             (
                 Certificate {
-                    fingerprint: Fingerprint::from_hex(&record.cert_fingerprint)
+                    fingerprint: Fingerprint::from_hex(&record.fingerprint)
                         .expect("invalid certificate fingerprint in database"),
                     secret: true,
                 },
-                Bytes::from(bytes::Bytes::from(record.enc_cert)),
+                Bytes::from(bytes::Bytes::from(record.body)),
             )
         })
         .try_collect()
@@ -118,8 +117,8 @@ impl Loader<Certificate> for PublicCertificateBodyLoader {
         let fingerprints: Vec<_> = keys.iter().map(|c| c.fingerprint.to_hex()).collect();
         Ok(sqlx::query!(
             r#"
-        SELECT pub_cert, cert_fingerprint FROM pub_certs
-        WHERE cert_fingerprint = ANY($1)
+        SELECT body, fingerprint FROM certificates
+        WHERE fingerprint = ANY($1)
         "#,
             &fingerprints
         )
@@ -127,11 +126,11 @@ impl Loader<Certificate> for PublicCertificateBodyLoader {
         .map_ok(|record| {
             (
                 Certificate {
-                    fingerprint: Fingerprint::from_hex(&record.cert_fingerprint)
+                    fingerprint: Fingerprint::from_hex(&record.fingerprint)
                         .expect("invalid certificate fingerprint in database"),
                     secret: false,
                 },
-                Bytes::from(bytes::Bytes::from(record.pub_cert)),
+                Bytes::from(bytes::Bytes::from(record.body)),
             )
         })
         .try_collect()

@@ -34,10 +34,10 @@ impl Loader<Certification> for CertificationBodyLoader {
             .unzip();
         Ok(sqlx::query!(
             r#"
-            SELECT certifier.cert_fingerprint AS certifier, target.cert_fingerprint AS target, certification
+            SELECT certifier.fingerprint AS certifier, target.fingerprint AS target, certifications.body
             FROM certifications
-            INNER JOIN pub_certs certifier ON (certifications.certifier_cert = certifier.cert_fingerprint)
-            INNER JOIN pub_certs target ON (certifications.target_cert = target.cert_fingerprint)
+            INNER JOIN certificates certifier ON (certifications.certifier_cert = certifier.fingerprint)
+            INNER JOIN certificates target ON (certifications.target_cert = target.fingerprint)
             WHERE target_cert = ANY($1)
             AND certifier_cert = ANY($2)
             "#,
@@ -51,7 +51,7 @@ impl Loader<Certification> for CertificationBodyLoader {
                     certifier: Certificate::from_public(Fingerprint::from_hex(&record.certifier).expect("invalid cert fingerprint in database")),
                     target: Certificate::from_public(Fingerprint::from_hex(&record.target).expect("invalid cert fingerprint in database")),
                 },
-                bytes::Bytes::from(record.certification).into(),
+                bytes::Bytes::from(record.body).into(),
             )
         })
         .try_collect()

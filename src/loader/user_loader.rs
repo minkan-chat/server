@@ -4,5 +4,5 @@ basic_loader!(
     UsernameLoader,
     uuid::Uuid,
     String,
-    "SELECT user_id AS ka, username AS val FROM users WHERE user_id = ANY($1)"
+    r#"SELECT "id" AS ka, username AS val FROM users WHERE "id" = ANY($1)"#
 );
