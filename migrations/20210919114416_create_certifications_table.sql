@@ -11,7 +11,9 @@ CREATE TABLE certifications (
     "target_cert" VARCHAR(40) NOT NULL REFERENCES certificates(fingerprint)
     -- a user shouldn't certify itself
     CONSTRAINT check_no_self_signature CHECK (certifier_cert != target_cert),
-    -- the actual certification a openpgp implementation can verify
-    -- its a openpgp signature packet
-    "body" BYTEA NOT NULL
+    -- the actual certification an openpgp implementation can verify
+    -- its an openpgp signature packet as defined in in sectopm 5.2 of RFC 4880
+    -- see https://datatracker.ietf.org/doc/html/rfc4880#section-5.2
+    "body" BYTEA NOT NULL,
+    PRIMARY KEY ("certifier_cert", "target_cert")
 )

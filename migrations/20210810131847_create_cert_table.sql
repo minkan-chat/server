@@ -1,5 +1,5 @@
 CREATE TABLE certificates (
-    "user_id" UUID NOT NULL UNIQUE REFERENCES users(id) PRIMARY KEY,
+    "user_id" TEXT NOT NULL UNIQUE REFERENCES users(id) PRIMARY KEY,
     -- a pgp fingerprint is a sha-1 hash which is hex encoded without spaces
     -- and all UPPERCASE
     "fingerprint" VARCHAR(40) NOT NULL UNIQUE CONSTRAINT check_sha1_uppercase_hex 
