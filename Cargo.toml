@@ -23,6 +23,7 @@ anyhow = { version = "1.0.51", features = ["std"] }
 figment = { version = "0.10.6", features = ["env", "toml"] }
 # for openid connect integrations
 openidconnect = "2.1.2"
+oauth2 = "4.1.0"
 # for hashing of the nonce and state parameter
 sha2 = "0.10.0"
 # used to encode the hash into base64 so it can be stored as a cookie 

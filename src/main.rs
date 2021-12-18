@@ -38,7 +38,11 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .wrap(Logger::default())
             // register endpoints
-            .service(web::scope("/oidc").service(oidc::login_redirect))
+            .service(
+                web::scope("/oidc")
+                    .service(oidc::login_redirect)
+                    .service(oidc::login_callback),
+            )
             .app_data(web::Data::new(config.clone()))
             .app_data(web::Data::new(Mutex::new(redis.clone())))
             .app_data(web::Data::new(db.clone()))

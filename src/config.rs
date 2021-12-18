@@ -40,6 +40,17 @@ pub struct OidcConfig {
     pub discovery_url: Url,
     /// The url the User-Agent should be redirected to after an authentication
     pub redirect_url: Url,
+    /// The url the server redirects to if the openid connect provider returned
+    /// an error. The server will append the `error`, `error_description` and
+    /// `error_uri` as recieved by the openid connect provider. This way, the
+    /// application (frontend) can provide a nice UI
+    pub app_redirect_error: Url,
+    /// The url the server redirects to if the authentication with the openid
+    /// connect provider was successful. The server WILL NOT include any token
+    /// or informations from the openid connect identity provider. Instead, the
+    /// server will set an `httpOnly` cookie with the access token which will
+    /// be used to authenticate against the server (e.g. the GraphQL API).
+    pub app_redirect_success: Url,
 }
 
 impl OidcConfig {

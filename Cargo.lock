@@ -1145,6 +1145,7 @@ dependencies = [
  "env_logger",
  "figment",
  "log",
+ "oauth2",
  "openidconnect",
  "redis",
  "serde",
