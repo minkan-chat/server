@@ -37,3 +37,10 @@ redis = { version = "0.21.4", features = ["tokio-native-tls-comp", "tokio-comp",
 serde_json = "1.0.59"
 # for an async Mutex
 tokio = { version = "1.14.0", features = ["sync"] }
+
+[features]
+# built-in authentication with an openid connect provider
+oidc_login = []
+
+# features enabled by default
+default = ["oidc_login"]

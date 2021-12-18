@@ -7,7 +7,7 @@ use figment::{
 use openidconnect::{
     core::{CoreClient, CoreProviderMetadata},
     reqwest::async_http_client,
-    ClientId, ClientSecret, IssuerUrl, RedirectUrl,
+    ClientId, ClientSecret, IssuerUrl,
 };
 use serde::Deserialize;
 use url::Url;
@@ -39,17 +39,20 @@ pub struct OidcConfig {
     /// [1]: https://openid.net/specs/openid-connect-discovery-1_0.html
     pub discovery_url: Url,
     /// The url the User-Agent should be redirected to after an authentication
+    #[cfg(feature = "oidc_login")]
     pub redirect_url: Url,
     /// The url the server redirects to if the openid connect provider returned
     /// an error. The server will append the `error`, `error_description` and
     /// `error_uri` as recieved by the openid connect provider. This way, the
     /// application (frontend) can provide a nice UI
+    #[cfg(feature = "oidc_login")]
     pub app_redirect_error: Url,
     /// The url the server redirects to if the authentication with the openid
     /// connect provider was successful. The server WILL NOT include any token
     /// or informations from the openid connect identity provider. Instead, the
     /// server will set an `httpOnly` cookie with the access token which will
     /// be used to authenticate against the server (e.g. the GraphQL API).
+    #[cfg(feature = "oidc_login")]
     pub app_redirect_success: Url,
 }
 
@@ -59,15 +62,17 @@ impl OidcConfig {
     pub async fn load_client(self) -> anyhow::Result<CoreClient> {
         let issuer_url = IssuerUrl::from_url(self.discovery_url);
 
-        let redirect_url = RedirectUrl::from_url(self.redirect_url);
+        #[cfg(feature = "oidc_login")]
+        let redirect_url = openidconnect::RedirectUrl::from_url(self.redirect_url);
 
         // perform request to the openid connect endpoint
         let meta = CoreProviderMetadata::discover_async(issuer_url, async_http_client).await?;
 
         let client_id = ClientId::new(self.client_id);
         let client_secret = ClientSecret::new(self.client_secret);
-        let client = CoreClient::from_provider_metadata(meta, client_id, Some(client_secret))
-            .set_redirect_uri(redirect_url);
+        let client = CoreClient::from_provider_metadata(meta, client_id, Some(client_secret));
+        #[cfg(feature = "oidc_login")]
+        let client = client.set_redirect_uri(redirect_url);
         Ok(client)
     }
 }
