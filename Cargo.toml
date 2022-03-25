@@ -1,50 +1,55 @@
 [package]
 name = "minkan_server"
 version = "0.1.0"
-authors = [
-    "Erik Tesar <erik@erik-tesar.com>",
-]
-edition = "2018"
+authors = ["Erik Tesar <erik@erik-tesar.com>"]
+edition = "2021"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-actix = "0.10"
-actix-web = "3"
-async-graphql = { version = "2.10", features = ["apollo_tracing", "uuid", "dataloader", "cbor"] }
-async-graphql-actix-web = "2.10"
-bitflags = "1.3"
-log = "0.4"
-pretty_env_logger = "0.4"
-thiserror = "1"
-sqlx = { version = "0.4", features = ["chrono", "ipnetwork", "macros", "migrate", "offline", "postgres", "runtime-actix-rustls", "uuid"] }
-serde = { version = "1", features = ["derive"]}
-serde_cbor = "0.11"
-serde_json = "1.0.66"
-uuid = { version = "0.8", features = ["serde", "v4"] }
-bytes = { version = "1", features = ["serde"] }
-moka = { version = "0.5", features = ["future"] }
-chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8.4"
-hex = "0.4.3"
-argon2 = "0.2"
-regex = "1.5.4"
-lazy_static = "1.4.0"
-jsonwebtoken = "8.0.0-beta.2"
-anyhow = "1.0.43"
-sequoia-openpgp = { version = "1.3", default-features = false}
-async-trait = "0.1.51"
-actix-web-httpauth = "0.5.1"
-futures = "0.3.17"
-redis = { version = "0.21.2", features = ["async-std-comp", "aio", "r2d2"] }
-r2d2 = "0.8.9"
-figment = { version = "0.10.6", features = ["env", "toml"]}
-directories = "3"
+# the web framework to serve endpoints
+actix-web = "4.0.1"
+# for the logger macros
+log = "0.4.14"
+# an backend to actually output logs
+env_logger = "0.9.0"
+serde = { version = "1.0.131", features = ["derive"] }
+# to proccess raw binary data
+bytes = { version = "1.1.0", features = ["serde"] }
+# for easy error handling
+anyhow = { version = "1.0.51", features = ["std"] }
+# for configuration
+figment = { version = "0.10.6", features = ["env", "toml"] }
+# for openid connect integrations
+openidconnect = "2.2"
+chrono = { version = "0.4.19", features = ["clock"] }
+oauth2 = "4.1.0"
+# for hashing of the nonce and state parameter
+sha2 = "0.10.0"
+# used to encode the hash into base64 so it can be stored as a cookie 
+base64 = "0.13.0"
+# used for redirect url parsing and cookie domain / path
+url = { version = "2.2.2", features = ["serde"] }
+# for communication with the postgres database
+sqlx = { version = "0.5.9", features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "runtime-actix-rustls",
+] }
+# for communication with redis so we can share state between instances
+redis = { version = "0.21.4", features = [
+    "tokio-native-tls-comp",
+    "tokio-comp",
+    "connection-manager",
+    "r2d2",
+] }
+serde_json = "1.0.59"
+# for an async Mutex
+tokio = { version = "1.14.0", features = ["sync"] }
 
 [features]
-# This is a workaround for https://github.com/rust-lang/cargo/issues/1197
-# On windows disable default features when building and enable the "win" feature
-# We won't need this anymore if Cargo supports target feature flags or we have
-# a full rust crypto backend (no c/c++ dependencies).
-default = ["unix"]
-win = ["sequoia-openpgp/crypto-cng"]
-unix = ["sequoia-openpgp/crypto-nettle"]
+# built-in authentication with an openid connect provider
+oidc_login = []
+
+# features enabled by default
+default = ["oidc_login"]

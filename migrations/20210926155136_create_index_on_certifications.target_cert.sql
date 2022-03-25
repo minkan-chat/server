@@ -1,1 +1,0 @@
-CREATE INDEX target_cert_idx ON certifications (target_cert)
