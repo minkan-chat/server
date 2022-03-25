@@ -164,9 +164,6 @@ async fn login_callback(
         .ok_or_else(|| InternalError::new("Missing state cookie", StatusCode::BAD_REQUEST))?;
 
     let mut response = HttpResponse::Found();
-    // delete the state since they are one time use only no matter if
-    // the request was successful or not
-    response.del_cookie(&state);
 
     match oidc_response {
         Either::Left(info) => {

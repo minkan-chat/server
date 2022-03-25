@@ -10,6 +10,7 @@ use tokio::sync::Mutex;
 #[macro_use]
 extern crate log;
 
+mod authn;
 mod config;
 #[cfg(feature = "oidc_login")]
 mod oidc;
@@ -38,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(HttpServer::new(move || {
         // allow this because else there's no nice way to register endpoints
         // based on a feature flag
-        #[warn(clippy::let_and_return)]
+        #[allow(clippy::let_and_return)]
         let app = App::new()
             .wrap(Logger::default())
             // register endpoints

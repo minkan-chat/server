@@ -1,15 +1,13 @@
 [package]
 name = "minkan_server"
 version = "0.1.0"
-authors = [
-    "Erik Tesar <erik@erik-tesar.com>",
-]
+authors = ["Erik Tesar <erik@erik-tesar.com>"]
 edition = "2021"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
 # the web framework to serve endpoints
-actix-web = "4.0.0-beta.14"
+actix-web = "4.0.1"
 # for the logger macros
 log = "0.4.14"
 # an backend to actually output logs
@@ -22,7 +20,8 @@ anyhow = { version = "1.0.51", features = ["std"] }
 # for configuration
 figment = { version = "0.10.6", features = ["env", "toml"] }
 # for openid connect integrations
-openidconnect = "2.1.2"
+openidconnect = "2.2"
+chrono = { version = "0.4.19", features = ["clock"] }
 oauth2 = "4.1.0"
 # for hashing of the nonce and state parameter
 sha2 = "0.10.0"
@@ -31,9 +30,19 @@ base64 = "0.13.0"
 # used for redirect url parsing and cookie domain / path
 url = { version = "2.2.2", features = ["serde"] }
 # for communication with the postgres database
-sqlx = { version = "0.5.9", features = ["macros", "migrate", "postgres", "runtime-actix-rustls"]}
+sqlx = { version = "0.5.9", features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "runtime-actix-rustls",
+] }
 # for communication with redis so we can share state between instances
-redis = { version = "0.21.4", features = ["tokio-native-tls-comp", "tokio-comp", "connection-manager", "r2d2"] }
+redis = { version = "0.21.4", features = [
+    "tokio-native-tls-comp",
+    "tokio-comp",
+    "connection-manager",
+    "r2d2",
+] }
 serde_json = "1.0.59"
 # for an async Mutex
 tokio = { version = "1.14.0", features = ["sync"] }
